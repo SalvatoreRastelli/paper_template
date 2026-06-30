@@ -1,11 +1,7 @@
-LATEXMK = latexmk
-
-all: paper/paper.pdf
-
-paper/paper.pdf: $(wildcard paper/*.tex) $(wildcard paper/*.bib)
-	cd paper && $(LATEXMK) -pdf paper.tex
+all:
+	cd paper && latexmk -pdf paper.tex
 
 clean:
-	cd paper && $(LATEXMK) -C
+	cd paper && latexmk -C
 
 .PHONY: all clean
