@@ -1,0 +1,7 @@
+child,parent
+m1,hub
+m2,hub
+L1,m1
+L2,m1
+L3,m2
+L4,m2

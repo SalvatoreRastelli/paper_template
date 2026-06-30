@@ -1,0 +1,593 @@
+\documentclass{article}
+\usepackage{amsmath, amssymb, amsthm}
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\geometry{margin=1in}
+
+\newcommand{\merw}{EigenTree}
+\newcommand{\merwft}{EigenTree-FT}
+\newcommand{\psiback}{\psi_{\mathrm{backup}}}
+
+\title{\merwft: Fault-Tolerant Hub Failover\\for Decentralized Bandit Coordination}
+\author{Salvatore Rastelli, Andrea Perin}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    \merw{} achieves centralized bandit performance through a decentralized spanning tree
+    rooted at an emergent hub node. The hub is a single point of failure: if it crashes,
+    the entire coordination protocol collapses. We propose \merwft, an extension that
+    tolerates permanent hub failure with zero communication overhead during normal
+    operation. The key idea is to designate the hub's direct child with the highest
+    eigenvector centrality as a passive backup. The backup mirrors the hub's global state at every
+    cycle for free, since it already receives the full downlink broadcast. Upon detecting
+    hub silence, the backup promotes itself as the new root, re-routes its sibling nodes
+    at depth 1, and resumes the bandit protocol from the last known state. Failover
+    completes in $O(\mathrm{diam}(G))$ rounds in general and $O(1)$ rounds when the
+    backup has direct graph edges to all former hub siblings. The backup's state is at
+    most one cycle stale at the moment of promotion. We formalize the protocol, prove
+    correctness of the failover procedure, and characterize the conditions under which the
+    backup is a principled substitute for the original hub.
+\end{abstract}
+
+\section{Introduction}
+
+\merw{} resolves the tension between decentralization and statistical efficiency in
+cooperative multi-agent bandits by constructing an emergent coordinator: the hub node
+$h^\star$, identified via eigenvector centrality without any agent observing the
+global graph. The hub aggregates observations from all agents, runs the bandit algorithm
+on global statistics, and broadcasts decisions back down the spanning tree.
+
+This design has a structural weakness: $h^\star$ is a single point of failure. If the hub
+crashes permanently, no other node holds the global statistics, no downlink is broadcast,
+and all non-hub agents are left waiting indefinitely. Restarting the full \merw{} pipeline
+to elect a new hub is infeasible during an ongoing bandit episode: it requires
+$\tau_{\mathrm{init}}$ power iteration rounds plus a max-flooding phase, and the new hub
+would start from scratch with no accumulated statistics.
+
+We propose a simple extension, \merwft, that resolves this without any overhead during
+normal operation. The core observation is that the hub's direct children already receive
+every downlink broadcast in the normal protocol. They therefore hold an exact copy of the
+hub's global state $(\hat{n}, \hat{s}, P)$ at the end of every cycle -- a form of passive
+replication that costs nothing extra. We designate the direct child with the highest
+eigenvector centrality score as the backup hub $b^\star$, announced once at tree construction time.
+If $h^\star$ goes silent, $b^\star$ promotes itself, assumes the root role, and the
+protocol continues with at most one cycle of disruption.
+
+This pattern is well-established in distributed systems. OSPF elects a Backup Designated
+Router (BDR) that mirrors every topology update from the Designated Router; upon DR
+failure the BDR promotes itself in one hello-interval \cite{rfc2328}. RSTP pre-identifies
+an Alternate Port for every non-root switch and activates it in a single
+proposal/agreement round \cite{ieee8021w}. The formal correctness of passive replication
+is established by Lamport, Malkhi and Zhou \cite{lamport2009vertical}, who show via
+reduction to Paxos that a backup mirroring the primary's state is at most one
+synchronization round stale and that failover is safe. \merwft{} applies this pattern
+to the aggregation-tree setting of \merw.
+
+\section{Background and Setup}
+
+We assume the same setting as \merw: $N$ agents on an undirected connected graph
+$G = (V, E)$, a spanning tree $\mathcal{T}$ rooted at hub $h^\star$ constructed via \merw{}
+power iteration and max-flooding, with tree depth $D$ and each node $i$ knowing its
+parent $\mathrm{par}(i)$, children $\mathrm{ch}(i)$, and depth $d_i$. Each relay cycle
+consists of an uplink phase ($D$ steps), a hub aggregation step, and a downlink phase
+($D$ steps). At the end of each downlink, every node at depth 1 holds the hub's global
+state $(\hat{n}, \hat{s}, P)$.
+
+We add two assumptions not present in \merw.
+
+\begin{definition}[Fail-stop failure]
+    A node may fail permanently at an unknown round $t_f$. After $t_f$, it sends no
+    messages and processes no packets. All other nodes are assumed to be live. Failure
+    is detectable via timeout: if a node expects a message within a known window and
+    receives none, it concludes the sender has failed.
+\end{definition}
+
+The timeout-based failure detector is necessary. Anagnostou and Hadzilacos
+\cite{anagnostou1993} prove that no purely self-stabilizing protocol can distinguish a
+permanently crashed node from a very slow live node in an asynchronous network; an
+external failure oracle (here, the cycle-length timeout) is required. In the fully
+asynchronous model, Chandra and Toueg \cite{chandratoueg1996} show that even
+timeout-based detectors are inherently unreliable: they can only suspect a node, not
+certify its failure. In our setting this ambiguity is resolved by the synchronous round
+structure of the bandit protocol: a missing uplink packet at a round boundary is
+conclusive evidence of failure, not delay.
+
+\begin{definition}[2-connectivity]
+\label{def:2conn}
+    The underlying graph $G$ is \emph{2-connected}: it remains connected after the
+    removal of any single node. Equivalently, $G$ has no cut vertices.
+\end{definition}
+
+This assumption is essential for rerouting after any node failure. The routing tree
+$\mathcal{T}$ is a spanning tree of $G$, not $G$ itself. During normal operation only
+tree edges are used; non-tree edges $E \setminus E(\mathcal{T})$ are idle. When a node
+$v$ fails, $\mathcal{T}$ loses $v$ and becomes a forest, but $G \setminus \{v\}$ remains
+connected by 2-connectivity. Rerouting therefore always uses non-tree edges of $G$ to
+re-establish paths that were broken in $\mathcal{T}$. Each node knows its neighbors in
+$G$ (not just its parent and children in $\mathcal{T}$), since neighbors in $G$ are
+discovered during the power iteration neighbor-exchange phase.
+
+\begin{remark}
+    If $G$ is a tree itself (i.e., $\mathcal{T} = G$), then $G$ has no non-tree edges
+    and every node is a cut vertex. Any single node failure permanently disconnects some
+    part of the network and no rerouting is possible. The 2-connectivity assumption is
+    therefore tight: it is the minimal condition that guarantees rerouting always succeeds
+    after a single node failure.
+\end{remark}
+
+\section{The Backup Hub}
+
+\subsection{Selection}
+
+During max-flooding, the hub $h^\star$ is the global maximum and never receives a flood
+packet from any neighbor: the flood propagates toward $h^\star$, not outward from it.
+Nodes route uplink packets toward the hub silently, without announcing their routing
+decision. The hub therefore does not know $\mathrm{ch}(h^\star)$ until the first uplink
+of the bandit phase, when packets from depth-1 nodes arrive directly.
+
+The hub learns its children from the first uplink: every node $j$ at depth 1 sends its
+observations directly to $h^\star$, revealing its identity. Along with each uplink packet,
+$j$ includes its local $\tilde{\psi}_j$ value (already computed during power iteration
+and stored locally). The hub collects all arriving packets, identifies
+$\mathrm{ch}(h^\star)$, and selects the backup:
+\[
+    b^\star = \arg\max_{j \in \mathrm{ch}(h^\star)} \tilde{\psi}_j.
+\]
+The hub announces $b^\star$ in the \emph{first downlink}, adding a single identifier
+field. All agents store $b^\star$'s identity upon receiving it. The first cycle therefore
+runs without a backup; hub failure during this single cycle is not covered by \merwft.
+
+\subsection{Analogy with EIGRP DUAL}
+
+The selection of $b^\star$ is directly analogous to the Diffusing Update Algorithm (DUAL)
+used in EIGRP \cite{garcia1993eigrp}, the routing protocol deployed in Cisco networks.
+We describe DUAL briefly to make the analogy precise.
+
+\paragraph{DUAL setup.} Each router $i$ maintains a routing table entry for every
+destination $d$, consisting of:
+\begin{itemize}
+    \item $\mathrm{FD}_i(d)$: the \emph{feasible distance}, the best known distance from
+        $i$ to $d$ at the time the current successor was chosen.
+    \item $\mathrm{RD}_j(d)$: the \emph{reported distance} from neighbor $j$ to $d$,
+        as advertised by $j$.
+    \item $\mathrm{successor}(i, d)$: the next-hop neighbor currently used to reach $d$.
+    \item $\mathrm{FS}(i, d)$: the set of \emph{feasible successors}, pre-computed
+        backup next-hops.
+\end{itemize}
+
+\paragraph{Feasibility condition.} A neighbor $j$ is a feasible successor for destination
+$d$ at router $i$ if:
+\[
+    \mathrm{RD}_j(d) < \mathrm{FD}_i(d).
+\]
+This condition guarantees that $j$ is strictly closer to $d$ than $i$ was when $i$ last
+updated its route, which is sufficient to ensure loop-freedom: $j$ cannot be routing
+through $i$ to reach $d$.
+
+\paragraph{Failover.} When the current successor to $d$ fails, DUAL checks whether
+$\mathrm{FS}(i, d)$ is non-empty. If so, the feasible successor with the lowest
+$\mathrm{RD}_j(d)$ is promoted to successor immediately, with no query to the rest of
+the network. Convergence is sub-second. If no feasible successor exists, DUAL initiates
+a diffusing computation (a network-wide query) to find a new route, which takes $O(D)$
+rounds in the worst case.
+
+\paragraph{Analogy with \merwft.} In our setting, the ``destination'' is the hub
+$h^\star$ and the ``distance'' metric is replaced by eigenvector centrality $\tilde{\psi}$.
+The feasibility condition becomes: $b^\star$ is a valid backup for $h^\star$ if
+$\tilde{\psi}_{b^\star}$ is the highest among $h^\star$'s direct children, i.e.,
+$b^\star$ is the most structurally central node adjacent to $h^\star$ in the tree. This
+is loop-free by construction: $b^\star$ is a child of $h^\star$, so it routes toward
+$h^\star$ and cannot already be routing through $h^\star$ to reach itself. The promotion
+in step 2 of Section~4.2 is the \merw{} analog of DUAL's feasible-successor activation:
+immediate, local, and requiring no network-wide query. When no backup exists (hub has
+only one child, or all children have equal $\tilde{\psi}$), the protocol falls back to a
+full \merw{} re-run, analogous to DUAL's diffusing computation.
+
+\subsection{Passive State Mirroring}
+
+During normal operation, $b^\star$ receives every downlink broadcast from $h^\star$
+exactly as any other depth-1 node does. It stores the received state:
+\[
+    (\hat{n}^{b^\star}, \hat{s}^{b^\star}, P^{b^\star}) \leftarrow (\hat{n}, \hat{s}, P)
+\]
+at the end of each cycle. No extra messages are sent; no extra computation is performed.
+This is passive replication in the sense of Lamport, Malkhi and Zhou
+\cite{lamport2009vertical}: the backup mirrors primary state synchronously and for free,
+since it already lies on the downlink path.
+
+\begin{proposition}[Backup state staleness]
+\label{prop:staleness}
+    At the end of cycle $r$, the backup $b^\star$ holds $(\hat{n}, \hat{s}, P)$ equal to
+    the hub's state after the hub's own pull in cycle $r$. If the hub fails during cycle
+    $r+1$ at any point before completing its downlink, the backup's state reflects all
+    observations up to and including the hub's pull in cycle $r$.
+\end{proposition}
+
+\begin{proof}
+    In cycle $r$, the hub receives the full uplink, updates $(\hat{n}, \hat{s})$ with all
+    agents' observations, increments $P$, performs its own pull, and broadcasts the
+    updated state in the downlink. $b^\star$ receives this downlink at step $d_{b^\star} =
+    1$ (it is at depth 1), so it holds the hub's state after the hub's pull. If the hub
+    fails at any point in cycle $r+1$ before completing the downlink of cycle $r+1$,
+    the last downlink $b^\star$ received was from cycle $r$. The backup's state is
+    therefore at most one full cycle stale.
+\end{proof}
+
+\section{Failover Protocol}
+
+\subsection{Failure Detection}
+
+Each depth-1 node, including $b^\star$, expects a downlink packet from $h^\star$ within
+$D$ steps of the end of the uplink phase. If no packet arrives, it declares the hub
+failed. Since all depth-1 nodes are synchronized (they sent their uplink packets at the
+same wall-clock step), they all detect silence simultaneously after the same timeout.
+
+\subsection{Promotion}
+
+Upon detecting hub failure, $b^\star$ executes the following promotion procedure:
+
+\begin{enumerate}
+    \item \textbf{Self-promotion}: $b^\star$ sets $d_{b^\star} \leftarrow 0$,
+        $\mathrm{par}(b^\star) \leftarrow \text{undefined}$, and begins acting as the
+        hub using its stored state $(\hat{n}^{b^\star}, \hat{s}^{b^\star}, P^{b^\star})$.
+
+    \item \textbf{Sibling re-routing}: $b^\star$ must notify all former siblings
+        $\mathrm{ch}(h^\star) \setminus \{b^\star\}$ that it is the new hub. In
+        $\mathcal{T}$, $b^\star$ is not directly connected to its siblings: their only
+        shared parent was $h^\star$, now failed. However, by 2-connectivity of $G$
+        (Definition~\ref{def:2conn}), each sibling $s$ has at least one neighbor in
+        $G \setminus \{h^\star\}$ other than its own subtree. $b^\star$ floods the
+        promotion message $\langle b^\star, \text{NEW-HUB}, d=1 \rangle$ over $G$-edges:
+        it sends to all its $G$-neighbors, which forward to their $G$-neighbors, until
+        every former sibling is reached. Since $G \setminus \{h^\star\}$ is connected
+        (by 2-connectivity), the flood reaches all siblings in at most $\mathrm{diam}(G
+        \setminus \{h^\star\})$ steps. Each sibling $s$ upon receiving the message sets
+        $\mathrm{par}(s) \leftarrow b^\star$ and $d_s \leftarrow 1$ if it has a direct
+        $G$-edge to $b^\star$, or re-routes via an intermediate node otherwise. Subtrees
+        below depth 1 are unaffected.
+
+    \item \textbf{Depth update}: $b^\star$ computes the new tree height. Since $b^\star$
+        moves from depth 1 to depth 0, its own subtree's depths decrease by 1. However,
+        the former siblings $s \in \mathrm{ch}(h^\star) \setminus \{b^\star\}$ now route
+        through $b^\star$, so nodes in their subtrees gain one extra hop. The new height
+        is:
+        \[
+            D' = \max\!\bigl(D - 1,\; \max_{s \in \mathrm{ch}(h^\star) \setminus \{b^\star\}} (d_s^{\max} + 1)\bigr),
+        \]
+        where $d_s^{\max}$ is the depth of the deepest leaf in $s$'s subtree. In the
+        common case where all depth-1 subtrees have the same height, $D' = D$. In the
+        worst case (e.g., a star graph where the hub has only one child $b^\star$ with no
+        subtree and all other agents are direct children of $h^\star$), the siblings
+        become children of $b^\star$ at depth 1, giving $D' = 1 = D$, so no increase
+        occurs. $b^\star$ broadcasts $D'$ in the first downlink after promotion so all
+        agents synchronize on the new cycle length.
+
+    \item \textbf{Resume}: $b^\star$ immediately begins the next cycle as the new hub,
+        accepting uplink packets from its children (now including the re-routed siblings).
+\end{enumerate}
+
+\begin{proposition}[Failover correctness]
+\label{prop:failover}
+    After promotion, the network forms a valid spanning tree $\mathcal{T}'$ rooted at
+    $b^\star$ with height $D' \leq D + 1$. Every node has a unique path to $b^\star$,
+    and no cycles are introduced.
+\end{proposition}
+
+\begin{proof}
+    Before promotion, $\mathcal{T}$ is a directed tree rooted at $h^\star$. Remove
+    $h^\star$ from $\mathcal{T}$. The result is a forest: one subtree rooted at each
+    child of $h^\star$, including $b^\star$. Step 2 adds a directed edge from each
+    sibling $s \in \mathrm{ch}(h^\star) \setminus \{b^\star\}$ to $b^\star$, merging
+    all subtrees into a single tree rooted at $b^\star$. Since the original edges within
+    each subtree are unchanged and each subtree was cycle-free, and the new edges are
+    directed from former siblings to $b^\star$ (which has no parent), no cycle can form.
+    The height increases by at most 1 (the path from the deepest node in a former sibling
+    subtree now passes through $b^\star$ rather than $h^\star$, which is the same number
+    of hops). Every node has a unique directed path to $b^\star$ by construction.
+\end{proof}
+
+\begin{proposition}[Failover completeness]
+\label{prop:completeness}
+    The promotion procedure completes in $O(\mathrm{diam}(G))$ rounds and requires
+    $O(|E|)$ messages in the worst case. If $b^\star$ is directly connected in $G$ to
+    all its former siblings, it completes in $O(1)$ rounds and $O(|\mathrm{ch}(h^\star)|)$
+    messages.
+\end{proposition}
+
+\begin{proof}
+    Step 1 is local. Step 2 floods the promotion message over $G \setminus \{h^\star\}$,
+    which is connected by 2-connectivity; the flood reaches all nodes in at most
+    $\mathrm{diam}(G \setminus \{h^\star\}) \leq \mathrm{diam}(G)$ rounds, touching at
+    most $|E|$ edges. If every former sibling has a direct $G$-edge to $b^\star$, step 2
+    completes in 1 round with $|\mathrm{ch}(h^\star)| - 1$ messages. Steps 3 and 4 are
+    piggy-backed on step 2 at no extra cost.
+\end{proof}
+
+\section{Discussion}
+
+\subsection{Why Depth-1 Nodes and Not the Whole Tree}
+
+A natural alternative is to broadcast $b^\star$'s identity and the new depth signal to
+the entire tree after promotion, so all nodes update their routing tables. This is
+unnecessary. Nodes at depth $\geq 2$ already route toward their parent, which routes
+toward $b^\star$ via the unchanged sub-tree structure. The only nodes whose parent
+pointer changes are the hub's direct siblings, which are exactly the nodes contacted in
+step 2. The rest of the tree is oblivious to the hub failure.
+
+\subsection{Recursive Backup: Tolerating Sequential Hub Failures}
+
+The single-backup limitation dissolves if the promotion procedure is applied
+\emph{recursively}. After $b^\star$ promotes itself to hub, it is now a hub with no
+pre-designated successor. Rather than pre-computing a chain of backups, the promoted hub
+simply re-runs the same selection procedure it observed from $h^\star$: it learns its new
+children from the first uplink, selects the highest-$\tilde\psi$ child as the new backup
+$b^{\star\star}$, and announces it in the first downlink. The protocol is therefore
+self-renewing: every hub, whether original or promoted, establishes its own successor
+after one cycle.
+
+\paragraph{Recursive protocol.} Formally, define the backup selection and announcement
+procedure as a subroutine $\textsc{SelectBackup}(h)$:
+\begin{enumerate}
+    \item Hub $h$ collects the first uplink, learning $\mathrm{ch}(h)$ and their
+        $\tilde\psi$ values.
+    \item $h$ sets $b_h \leftarrow \arg\max_{j \in \mathrm{ch}(h)} \tilde\psi_j$ and
+        announces $b_h$ in the first downlink. All agents store $b_h$.
+    \item Upon hub failure, $b_h$ runs the failover protocol of Section~4.2, promotes
+        itself, and immediately calls $\textsc{SelectBackup}(b_h)$.
+\end{enumerate}
+This recursion terminates naturally when the current hub has no children, meaning it is
+the last surviving node and there is nothing left to coordinate.
+
+\begin{proposition}[Sequential hub failure tolerance]
+\label{prop:recursive}
+    Under the recursive backup protocol, \merwft{} tolerates any finite sequence of
+    hub failures $h^\star = h_0, h_1, h_2, \ldots$ where each $h_{k+1}$ is the backup
+    selected by $h_k$. After each failure, exactly one cycle runs without a backup, and
+    the protocol resumes with a newly selected successor.
+\end{proposition}
+
+\begin{proof}
+    By induction on the number of failures. At step 0, $h_0 = h^\star$ selects $b_{h_0}$
+    after the first uplink (Proposition~\ref{prop:staleness} applies). If $h_0$ fails,
+    $h_1 = b_{h_0}$ promotes via Proposition~\ref{prop:failover} and calls
+    $\textsc{SelectBackup}(h_1)$. The first cycle of $h_1$'s tenure runs without a
+    backup; thereafter $h_1$ has announced $b_{h_1}$. If $h_1$ fails, $h_2 = b_{h_1}$
+    promotes and the argument repeats. At each step the number of live nodes decreases by
+    at least one (the failed hub), so the sequence terminates in at most $N-1$ failures.
+\end{proof}
+
+\paragraph{Depth under sequential failures.} Each promotion may change the tree height
+as analyzed in Section~4.2. After $k$ sequential hub failures the height is
+$D^{(k)} \leq D + k$ in the worst case, since each promotion adds at most one level.
+In practice the promoted nodes follow the highest-$\tilde\psi$ path downward from
+$h^\star$, which on heterogeneous graphs (Barabasi-Albert, Erdos-Renyi) tends to stay
+near the dense core of the graph, keeping $D^{(k)}$ close to $D$.
+
+\subsection{Non-Hub Node Failure}
+
+When a non-hub node $v$ at depth $d_v$ fails, the impact is local: only the subtree
+rooted at $v$ is disrupted. The hub and all nodes outside this subtree continue operating
+normally.
+
+\paragraph{Failure detection.} The correct locus of detection is $v$'s parent
+$\mathrm{par}(v)$, not $v$'s children and not the hub. In each round, $\mathrm{par}(v)$
+expects a forwarded uplink packet from $v$ within a known window (one hop delay). If no
+packet arrives, $\mathrm{par}(v)$ declares $v$ failed. This is strictly faster than
+child-driven detection (children would only notice failure when their own uplink finds no
+relay, which takes $D - d_v$ hops to manifest) and faster than hub-driven detection
+(which requires a full cycle to notice a missing contribution). The parent-driven approach
+is supported by Chitnis et al.\ \cite{chitnis2009} and the proactive multicast recovery
+of Liao et al.\ \cite{liao2007proactive}, who show that parent monitoring minimizes both
+detection latency and false-positive rate compared to child or hub detection.
+
+Once $\mathrm{par}(v)$ detects failure, it notifies $v$'s children
+$\mathrm{ch}(v)$ directly via $G$-edges (it knows $\mathrm{ch}(v)$ because $v$'s
+children sent uplink packets through $v$ to $\mathrm{par}(v)$ in prior rounds, revealing
+their identities). It pushes the re-attachment assignment to each child in one message,
+eliminating the need for children to independently scan their neighborhood.
+
+\paragraph{Precomputed swap edges.} Rather than scanning $G$-neighbors at failure time,
+each node $c$ precomputes a \emph{swap parent} $u_c$ during tree construction, following
+the best-swap-edge framework of Nardelli et al.\ \cite{nardelli2003} and its distributed
+variant by Datta et al.\ \cite{datta2013}. The swap parent minimizes the maximum depth
+increase across $c$'s entire subtree, not just $c$'s own depth:
+\[
+    u_c = \arg\min_{u \in \mathcal{N}_G(c) \setminus \{v\}} \max_{\ell \in \mathrm{subtree}(c)} (d_u + 1 + d_\ell - d_c),
+\]
+where $d_\ell - d_c$ is the depth of $\ell$ within $c$'s subtree. This precomputation
+requires one extra message per node during the tree construction phase (each node
+broadcasts its depth to its $G$-neighbors), costs $O(|E|)$ total messages, and
+eliminates any on-the-fly neighbor scanning at failure time. Re-attachment then takes
+exactly 1 round: $\mathrm{par}(v)$ pushes the swap assignments, each child $c$ sets
+$\mathrm{par}(c) \leftarrow u_c$ and updates its depth as
+\[
+    d_c' = d_{u_c} + 1,
+\]
+and propagates the shift to every descendant $\ell$ in its subtree:
+\[
+    d_\ell' = d_c' + (d_\ell - d_c).
+\]
+The whole subtree of $c$ shifts uniformly by the offset $d_{u_c} + 1 - d_c$, so the
+relative structure within the subtree is preserved.
+
+\paragraph{Depth increase.} If $v$ was the only node at depth $d_v$ on the path between
+some leaf $\ell$ and the hub, re-attachment may increase the depth of $\ell$'s subtree.
+In the worst case, if $c$ has no neighbor at depth $d_v - 1$ other than $v$, it must
+attach to a node at depth $d_v$, making its own depth $d_v + 1$ and pushing all
+descendants down by one level. The new tree depth is
+\[
+    D' = \max\bigl(D_{\mathrm{rest}},\ \max_{c \in \mathrm{ch}(v)} (d_{u_c} + 1 + d_c^{\max} - d_c)\bigr),
+\]
+where $D_{\mathrm{rest}}$ is the depth of the unaffected part of the tree and
+$d_c^{\max}$ is the depth of the deepest leaf in $c$'s subtree before re-attachment.
+The hub learns $D'$ via the next uplink: every node piggybacks its current depth, so
+the hub takes the max over all received values. In the extreme case of a chain graph
+where $v$ is the unique intermediate node at depth $d_v$, this gives $D' = D + 1$.
+
+\paragraph{Consequence for the protocol.} A depth increase changes the cycle length from
+$2D + 1$ to $2D' + 1$. The hub must broadcast the updated $D'$ in the next downlink so
+all agents synchronize on the new cycle length. This requires one extra downlink field,
+identical to the depth signal already present in the protocol. No other structural change
+is needed: the bandit algorithm running at the hub is unaffected, and all live agents
+continue routing toward the hub via their updated parent pointers.
+
+\begin{proposition}[Non-hub failover correctness]
+\label{prop:nonhub}
+    After re-attachment of all orphaned children of a failed node $v$, the remaining live
+    nodes form a valid spanning tree rooted at $h^\star$ (or $b^\star$ if hub failover
+    has already occurred) with height $D' \leq D + |\mathrm{ch}(v)|$. No cycles are
+    introduced.
+\end{proposition}
+
+\begin{proof}
+    Before failure, $\mathcal{T}$ is a directed tree. Remove $v$: the result is a forest
+    with one subtree rooted at each $c \in \mathrm{ch}(v)$ and one subtree containing the
+    hub. By 2-connectivity of $G$ (Definition~\ref{def:2conn}), $G \setminus \{v\}$ is
+    connected, so each orphaned child $c$ has at least one live $G$-neighbor $u_c \in
+    \mathcal{N}_G(c) \setminus \{v\}$ (which may be a tree edge to a sibling subtree or
+    a non-tree edge of $G$) with finite depth. Since $G \setminus \{v\}$ is connected and
+    the hub is in $G \setminus \{v\}$, $u_c$ lies in the hub's component. We select $u_c$
+    with $d_{u_c} < d_c$, which is possible because $u_c$ is not itself an orphan (only
+    children of $v$ are orphaned under single node failure) and thus has a well-defined
+    depth. Adding the directed edge $c \to u_c$ connects $c$'s subtree to the hub's
+    component. No cycle forms: $u_c$ routes toward the hub and not through $c$. Repeating
+    for each $c \in \mathrm{ch}(v)$ merges all orphaned subtrees into the hub's component.
+    The depth of any node in $c$'s
+    subtree increases by at most 1 per re-attachment; since there are $|\mathrm{ch}(v)|$
+    orphaned children, $D' \leq D + |\mathrm{ch}(v)|$.
+\end{proof}
+
+\begin{remark}
+    In practice $|\mathrm{ch}(v)|$ is small (the tree degree of an intermediate node),
+    so the depth increase is bounded and modest. On graphs with high connectivity,
+    orphaned children typically find a neighbor at the same or lower depth, giving
+    $D' = D$ with no cycle length change at all.
+\end{remark}
+
+\subsection{Remaining Limitations}
+
+\paragraph{Simultaneous failures.}
+If the current hub and its designated backup fail simultaneously, or if the backup fails
+before the hub, the protocol has no failover mechanism. Under the recursive protocol,
+the unprotected window is exactly one cycle (between hub promotion and backup
+announcement); a failure of the new hub during this window leaves the network without a
+coordinator. This is a fundamental constraint of the fail-stop model with a single
+failure detector: distinguishing simultaneous failure from sequential failure requires
+either redundant failure detectors or a Byzantine fault model, both of which are out of
+scope.
+
+\paragraph{State staleness and regret.}
+Proposition~\ref{prop:staleness} shows the backup's state is at most one cycle stale.
+The consequence for bandit performance -- how much regret is incurred by resuming from a
+one-cycle-old state -- is left for future work. Informally, UCB's confidence intervals
+are monotonically widening in $P$, so using a slightly smaller $P$ makes the algorithm
+more exploratory rather than less, which is conservative rather than catastrophic.
+
+\subsection{Relation to the Literature}
+
+The passive backup pattern of \merwft{} is an instance of primary-backup replication,
+formalized by Lamport, Malkhi and Zhou \cite{lamport2009vertical} as a special case of
+Paxos. The one-cycle staleness bound (Proposition~\ref{prop:staleness}) corresponds
+exactly to the one-synchronization-round staleness of passive replication.
+
+The impossibility result of Anagnostou and Hadzilacos \cite{anagnostou1993} establishes
+why the timeout-based failure detector in Section~4.1 is necessary and not an
+engineering convenience: distinguishing a crashed hub from a slow hub is impossible
+without it in an asynchronous model.
+
+The sibling re-rooting procedure in Proposition~\ref{prop:failover} is a special case
+of the tree reconfiguration algorithm of Arora \cite{arora1994}, which handles arbitrary
+node failure including root failure in $O(n)$ time. \merwft{} restricts the structural
+change to depth-1 nodes, but the sibling notification must flood over $G$-edges since
+$b^\star$ and its former siblings share no direct tree edges after $h^\star$ is removed.
+The flood completes in $O(\mathrm{diam}(G))$ in general and $O(1)$ when $b^\star$ has
+direct $G$-edges to all former siblings -- a condition that holds with high probability on
+dense graphs such as Barabasi-Albert networks, where the hub and its neighbors form a
+dense clique-like core. The precomputed swap-edge framework of Nardelli et al.\
+\cite{nardelli2003} and its distributed linear-time variant \cite{datta2013} provide the
+right foundation for the non-hub re-attachment rule, replacing on-the-fly neighbor
+scanning with a one-round precomputed assignment.
+
+\bibliographystyle{plain}
+\begin{thebibliography}{9}
+
+\bibitem{lamport2009vertical}
+L.~Lamport, D.~Malkhi, and L.~Zhou.
+\newblock Vertical Paxos and primary-backup replication.
+\newblock In \emph{Proceedings of PODC}, pp.~27--36, 2009.
+
+\bibitem{anagnostou1993}
+E.~Anagnostou and V.~Hadzilacos.
+\newblock Tolerating transient and permanent failures.
+\newblock In \emph{Proceedings of WDAG}, LNCS 725, pp.~174--188, 1993.
+
+\bibitem{arora1994}
+A.~Arora.
+\newblock Efficient reconfiguration of trees.
+\newblock In \emph{Proceedings of FTRTFT}, LNCS 863, Springer, 1994.
+
+\bibitem{rfc2328}
+J.~Moy.
+\newblock {OSPF} version 2.
+\newblock \emph{RFC 2328}, IETF, 1998.
+
+\bibitem{ieee8021w}
+{IEEE}.
+\newblock {IEEE} 802.1w: Rapid reconfiguration of spanning tree, 2001.
+
+\bibitem{garcia1993eigrp}
+J.J.~Garcia-Luna-Aceves.
+\newblock Loop-free routing using diffusing computations.
+\newblock \emph{IEEE/ACM Transactions on Networking}, 1(1):130--141, 1993.
+
+\bibitem{nardelli2003}
+E.~Nardelli, G.~Proietti, and P.~Widmayer.
+\newblock Swapping a failing edge of a single source shortest paths tree is good and fast.
+\newblock \emph{Algorithmica}, 35:56--74, 2003.
+
+\bibitem{datta2013}
+A.K.~Datta, L.L.~Larmore, L.~Pagli, and G.~Prencipe.
+\newblock Linear time distributed swap edge algorithms.
+\newblock In \emph{Proceedings of SIROCCO}, LNCS 8179, pp.~162--174, 2013.
+
+\bibitem{chitnis2009}
+L.~Chitnis, A.~Dobra, and S.~Ranka.
+\newblock Analyzing the techniques that improve fault tolerance of aggregation trees in sensor networks.
+\newblock \emph{Journal of Parallel and Distributed Computing}, 69(12):950--960, 2009.
+
+\bibitem{liao2007proactive}
+X.~Liao, H.~Jin, Y.~Liu, L.M.~Ni, and D.~Deng.
+\newblock A proactive tree recovery mechanism for resilient overlay multicast.
+\newblock \emph{IEEE/ACM Transactions on Networking}, 14(6):1729--1741, 2007.
+
+\bibitem{chandratoueg1996}
+T.D.~Chandra and S.~Toueg.
+\newblock Unreliable failure detectors for reliable distributed systems.
+\newblock \emph{Journal of the ACM}, 43(2):225--267, 1996.
+
+\bibitem{burda2009localization}
+Z.~Burda, J.~Duda, J.M.~Luck, and B.~Waclaw.
+\newblock Localization of the maximal entropy random walk.
+\newblock \emph{Physical Review Letters}, 102(16):160602, 2009.
+
+\bibitem{jelasity2007asynchronous}
+M.~Jelasity, G.~Canright, and K.~Eng\o-Monsen.
+\newblock Asynchronous distributed power iteration with gossip-based normalization.
+\newblock In \emph{European Conference on Parallel Processing}, pp.~514--525, 2007.
+
+\end{thebibliography}
+
+\end{document}

@@ -30,13 +30,16 @@ jobs:
           sudo apt-get install -y \
             latexmk \
             texlive-latex-extra \
-            texlive-fonts-recommended
+            texlive-fonts-recommended \
+            texlive-science
 
       - name: Build paper
         run: make
 
-      - name: Upload PDF
+      - name: Upload PDFs
         uses: actions/upload-artifact@v4
         with:
           name: paper-pdf
-          path: paper/paper.pdf
+          path: |
+            paper/merw_ucb.pdf
+            paper/merw_fault_tolerant.pdf
