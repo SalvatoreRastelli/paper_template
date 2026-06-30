@@ -1,8 +1,9 @@
-paper/*.aux
-paper/*.fdb_latexmk
-paper/*.fls
-paper/*.log
-paper/*.out
-paper/*.toc
-paper/*.synctex.gz
-paper/*.pdf
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.pdf
+*.svg

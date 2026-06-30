@@ -2,7 +2,8 @@ name: Build paper
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
 
 jobs:
@@ -12,11 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            latexmk \
+            texlive-latex-extra \
+            texlive-fonts-recommended
+
       - name: Build paper
-        uses: xu-cheng/latex-action@v4
-        with:
-          root_file: paper.tex
-          working_directory: paper
+        run: make
 
       - name: Upload PDF
         uses: actions/upload-artifact@v4
