@@ -13,6 +13,7 @@
 \usepackage{xcolor}
 \usepackage{float}
 \usepackage{natbib}
+\usepackage{booktabs}
 \geometry{margin=1in}
 
 \newcommand{\merw}{EigenTree}
@@ -159,7 +160,7 @@ There are $K$ arms with unknown means $\mu_1 \geq \mu_2 \geq \cdots \geq \mu_K$ 
 R(T) = \sum_{i \in V} \sum_{t=1}^{T} \mathbb{E}[\mu_1 - \mu_{a_i(t)}].
 \]
 
-Each relay cycle lasts exactly $2D + 1$ rounds. At the start of each cycle all $N$ agents pull simultaneously; the hub aggregates observations via the uplink, runs UCB on the global statistics, and broadcasts its estimates back down. Non-hub nodes update their local estimates upon receiving the downlink and schedule their next pull to align with the start of the next cycle. The total-pull count $P$ (indexed by actual arm pulls, not wall-clock rounds, following \citep{martinez2019decentralized}) is maintained exactly by the hub and broadcast in the downlink so all nodes use a consistent UCB bonus. The full pseudocode is given in Algorithm~\ref{alg:merw} (Appendix~\ref{app:pseudocode}).
+Each relay cycle lasts exactly $2D + 1$ rounds. At the start of each cycle all $N$ agents pull simultaneously; the hub aggregates observations via the uplink, runs UCB on the global statistics, and broadcasts its estimates back down. Non-hub nodes update their local estimates upon receiving the downlink and schedule their next pull to align with the start of the next cycle. The total-pull count $P$ (indexed by actual arm pulls, not wall-clock rounds, following \citep{martinez2019decentralized}) is maintained exactly by the hub and broadcast in the downlink so all nodes use a consistent UCB bonus. \merw-UCB is one instantiation of the generic protocol given as Algorithm~\ref{alg:merw-generic} (Appendix~\ref{app:pseudocode}); Table~\ref{tab:instantiations} in the same appendix specifies the hooks that turn Algorithm~\ref{alg:merw-generic} into \merw-UCB and, side by side, into \merw-BAI (Section~\ref{sec:bai}).
 
 \subsection{Regret Bound}
 
@@ -217,7 +218,7 @@ In the BAI setting the horizon $T$ is not fixed. Instead, given a confidence par
     \item \textbf{Downlink} ($D$ steps): the hub broadcasts the new surviving set $S_r$ and the depth signal $D$ hop-by-hop back down the tree. Each node at depth $d$ receives the packet after $d$ steps and waits $D - d$ additional steps before starting the next pull phase, ensuring all nodes are synchronized.
 \end{enumerate}
 
-The total time cost per round is $L_r + 2D$ steps (pull + uplink + downlink), compared to $L_r + 1$ for Hillel (pull phase plus one all-to-all broadcast round). The sample complexity in terms of total arm pulls is identical: $N \cdot L_r \cdot |S_{r-1}|$ per round.
+The total time cost per round is $L_r + 2D$ steps (pull + uplink + downlink), compared to $L_r + 1$ for Hillel (pull phase plus one all-to-all broadcast round). The sample complexity in terms of total arm pulls is identical: $N \cdot L_r \cdot |S_{r-1}|$ per round. \merw-BAI is the second instantiation of the generic protocol, Algorithm~\ref{alg:merw-generic} (Appendix~\ref{app:pseudocode}); Table~\ref{tab:instantiations} specifies its hooks side by side with \merw-UCB's.
 
 \subsection{Comparison with Hillel}
 
@@ -248,10 +249,12 @@ Empirically, we compare total arm pulls as a function of $N$ in Figure~\ref{fig:
     \label{fig:bai}
 \end{figure}
 
-\section{Fault-Tolerant Hub Failover}
+\section{Fault Tolerance}
 \label{sec:ft}
 
-\merw{} achieves centralized bandit performance through a decentralized spanning tree rooted at an emergent hub node, but as noted in the introduction, the hub is a single point of failure. We now present \merwft, an extension that tolerates permanent hub failure with zero communication overhead during normal operation. The key idea is to designate the hub's direct child with the highest eigenvector centrality as a passive backup. The backup mirrors the hub's global state at every cycle for free, since it already receives the full downlink broadcast. Upon detecting hub silence, the backup promotes itself as the new root, re-routes its sibling nodes at depth 1, and resumes the bandit protocol from the last known state. Failover completes in $O(\mathrm{diam}(G))$ rounds in general and $O(1)$ rounds when the backup has direct graph edges to all former hub siblings. The backup's state is at most one cycle stale at the moment of promotion.
+Every node in $\mathcal{T}$ is a potential failure point, and \merwft{} must account for the failure of \emph{any} node, not only the hub. The consequences, however, are highly asymmetric. The hub is the coordinator: it alone runs the bandit algorithm on globally aggregated statistics, and if it fails permanently, no downlink is broadcast, no agent learns the outcome of the current round, and the entire coordination structure collapses -- restarting the full \merw{} pipeline mid-episode is infeasible, since it requires a fresh power-iteration and max-flooding phase with no accumulated statistics. A non-hub node, by contrast, is a relay for one subtree: its failure disrupts only the agents below it, while the hub and the rest of the tree continue operating normally. Both cases must be handled, but they call for different mechanisms and different urgency, so we treat them in turn: Section~\ref{sec:ft-backup} through Section~\ref{sec:ft-recursive} address hub failure, the more consequential case, and Section~\ref{sec:nonhub} addresses non-hub node failure, which is more localized and, as we show, cheaper to repair.
+
+\merwft{} tolerates permanent hub failure with zero communication overhead during normal operation. The key idea is to designate the hub's direct child with the highest eigenvector centrality as a passive backup. The backup mirrors the hub's global state at every cycle for free, since it already receives the full downlink broadcast. Upon detecting hub silence, the backup promotes itself as the new root, re-routes its sibling nodes at depth 1, and resumes the bandit protocol from the last known state. Failover completes in $O(\mathrm{diam}(G))$ rounds in general and $O(1)$ rounds when the backup has direct graph edges to all former hub siblings. The backup's state is at most one cycle stale at the moment of promotion. Non-hub failure, addressed in Section~\ref{sec:nonhub}, is repaired locally via precomputed swap edges in $O(1)$ rounds, without ever involving the hub.
 
 \subsection{Background and Setup}
 \label{sec:ft-setup}
@@ -301,6 +304,7 @@ discovered during the power iteration neighbor-exchange phase.
 \end{remark}
 
 \subsection{The Backup Hub}
+\label{sec:ft-backup}
 
 \subsubsection{Selection}
 
@@ -492,6 +496,108 @@ Upon detecting hub failure, $b^\star$ executes the following promotion procedure
     piggy-backed on step 2 at no extra cost.
 \end{proof}
 
+\subsection{Non-Hub Node Failure}
+\label{sec:nonhub}
+
+When a non-hub node $v$ at depth $d_v$ fails, the impact is local: only the subtree
+rooted at $v$ is disrupted. The hub and all nodes outside this subtree continue operating
+normally.
+
+\paragraph{Failure detection.} The correct locus of detection is $v$'s parent
+$\mathrm{par}(v)$, not $v$'s children and not the hub. In each round, $\mathrm{par}(v)$
+expects a forwarded uplink packet from $v$ within a known window (one hop delay). If no
+packet arrives, $\mathrm{par}(v)$ declares $v$ failed. This is strictly faster than
+child-driven detection (children would only notice failure when their own uplink finds no
+relay, which takes $D - d_v$ hops to manifest) and faster than hub-driven detection
+(which requires a full cycle to notice a missing contribution). The parent-driven approach
+is supported by Chitnis et al.\ \citep{chitnis2009} and the proactive multicast recovery
+of Liao et al.\ \citep{liao2007proactive}, who show that parent monitoring minimizes both
+detection latency and false-positive rate compared to child or hub detection.
+
+Once $\mathrm{par}(v)$ detects failure, it notifies $v$'s children
+$\mathrm{ch}(v)$ directly via $G$-edges (it knows $\mathrm{ch}(v)$ because $v$'s
+children sent uplink packets through $v$ to $\mathrm{par}(v)$ in prior rounds, revealing
+their identities). It pushes the re-attachment assignment to each child in one message,
+eliminating the need for children to independently scan their neighborhood.
+
+\paragraph{Precomputed swap edges.} Rather than scanning $G$-neighbors at failure time,
+each node $c$ precomputes a \emph{swap parent} $u_c$ during tree construction, following
+the best-swap-edge framework of Nardelli et al.\ \citep{nardelli2003} and its distributed
+variant by Datta et al.\ \citep{datta2013}. The swap parent minimizes the maximum depth
+increase across $c$'s entire subtree, not just $c$'s own depth:
+\[
+    u_c = \arg\min_{u \in \mathcal{N}_G(c) \setminus \{v\}} \max_{\ell \in \mathrm{subtree}(c)} (d_u + 1 + d_\ell - d_c),
+\]
+where $d_\ell - d_c$ is the depth of $\ell$ within $c$'s subtree. This precomputation
+requires one extra message per node during the tree construction phase (each node
+broadcasts its depth to its $G$-neighbors), costs $O(|E|)$ total messages, and
+eliminates any on-the-fly neighbor scanning at failure time. Re-attachment then takes
+exactly 1 round: $\mathrm{par}(v)$ pushes the swap assignments, each child $c$ sets
+$\mathrm{par}(c) \leftarrow u_c$ and updates its depth as
+\[
+    d_c' = d_{u_c} + 1,
+\]
+and propagates the shift to every descendant $\ell$ in its subtree:
+\[
+    d_\ell' = d_c' + (d_\ell - d_c).
+\]
+The whole subtree of $c$ shifts uniformly by the offset $d_{u_c} + 1 - d_c$, so the
+relative structure within the subtree is preserved.
+
+\paragraph{Depth increase.} If $v$ was the only node at depth $d_v$ on the path between
+some leaf $\ell$ and the hub, re-attachment may increase the depth of $\ell$'s subtree.
+In the worst case, if $c$ has no neighbor at depth $d_v - 1$ other than $v$, it must
+attach to a node at depth $d_v$, making its own depth $d_v + 1$ and pushing all
+descendants down by one level. The new tree depth is
+\[
+    D' = \max\bigl(D_{\mathrm{rest}},\ \max_{c \in \mathrm{ch}(v)} (d_{u_c} + 1 + d_c^{\max} - d_c)\bigr),
+\]
+where $D_{\mathrm{rest}}$ is the depth of the unaffected part of the tree and
+$d_c^{\max}$ is the depth of the deepest leaf in $c$'s subtree before re-attachment.
+The hub learns $D'$ via the next uplink: every node piggybacks its current depth, so
+the hub takes the max over all received values. In the extreme case of a chain graph
+where $v$ is the unique intermediate node at depth $d_v$, this gives $D' = D + 1$.
+
+\paragraph{Consequence for the protocol.} A depth increase changes the cycle length from
+$2D + 1$ to $2D' + 1$. The hub must broadcast the updated $D'$ in the next downlink so
+all agents synchronize on the new cycle length. This requires one extra downlink field,
+identical to the depth signal already present in the protocol. No other structural change
+is needed: the bandit algorithm running at the hub is unaffected, and all live agents
+continue routing toward the hub via their updated parent pointers.
+
+\begin{proposition}[Non-hub failover correctness]
+\label{prop:nonhub}
+    After re-attachment of all orphaned children of a failed node $v$, the remaining live
+    nodes form a valid spanning tree rooted at $h^\star$ (or $b^\star$ if hub failover
+    has already occurred) with height $D' \leq D + |\mathrm{ch}(v)|$. No cycles are
+    introduced.
+\end{proposition}
+
+\begin{proof}
+    Before failure, $\mathcal{T}$ is a directed tree. Remove $v$: the result is a forest
+    with one subtree rooted at each $c \in \mathrm{ch}(v)$ and one subtree containing the
+    hub. By 2-connectivity of $G$ (Definition~\ref{def:2conn}), $G \setminus \{v\}$ is
+    connected, so each orphaned child $c$ has at least one live $G$-neighbor $u_c \in
+    \mathcal{N}_G(c) \setminus \{v\}$ (which may be a tree edge to a sibling subtree or
+    a non-tree edge of $G$) with finite depth. Since $G \setminus \{v\}$ is connected and
+    the hub is in $G \setminus \{v\}$, $u_c$ lies in the hub's component. We select $u_c$
+    with $d_{u_c} < d_c$, which is possible because $u_c$ is not itself an orphan (only
+    children of $v$ are orphaned under single node failure) and thus has a well-defined
+    depth. Adding the directed edge $c \to u_c$ connects $c$'s subtree to the hub's
+    component. No cycle forms: $u_c$ routes toward the hub and not through $c$. Repeating
+    for each $c \in \mathrm{ch}(v)$ merges all orphaned subtrees into the hub's component.
+    The depth of any node in $c$'s
+    subtree increases by at most 1 per re-attachment; since there are $|\mathrm{ch}(v)|$
+    orphaned children, $D' \leq D + |\mathrm{ch}(v)|$.
+\end{proof}
+
+\begin{remark}
+    In practice $|\mathrm{ch}(v)|$ is small (the tree degree of an intermediate node),
+    so the depth increase is bounded and modest. On graphs with high connectivity,
+    orphaned children typically find a neighbor at the same or lower depth, giving
+    $D' = D$ with no cycle length change at all.
+\end{remark}
+
 \subsection{Discussion}
 \label{sec:ft-discussion}
 
@@ -595,6 +701,7 @@ enough to prevent a single hub failure from cascading into spurious non-hub fail
 throughout the affected subtrees.
 
 \subsubsection{Recursive Backup: Tolerating Sequential Hub Failures}
+\label{sec:ft-recursive}
 
 The single-backup limitation dissolves if the promotion procedure is applied
 \emph{recursively}. After $b^\star$ promotes itself to hub, it is now a hub with no
@@ -643,108 +750,6 @@ is $D^{(k)} \leq D + k$ in the worst case, since each promotion adds at most one
 In practice the promoted nodes follow the highest-$\tilde\psi$ path downward from
 $h^\star$, which on heterogeneous graphs (Barabasi-Albert, Erdos-Renyi) tends to stay
 near the dense core of the graph, keeping $D^{(k)}$ close to $D$.
-
-\subsubsection{Non-Hub Node Failure}
-\label{sec:nonhub}
-
-When a non-hub node $v$ at depth $d_v$ fails, the impact is local: only the subtree
-rooted at $v$ is disrupted. The hub and all nodes outside this subtree continue operating
-normally.
-
-\paragraph{Failure detection.} The correct locus of detection is $v$'s parent
-$\mathrm{par}(v)$, not $v$'s children and not the hub. In each round, $\mathrm{par}(v)$
-expects a forwarded uplink packet from $v$ within a known window (one hop delay). If no
-packet arrives, $\mathrm{par}(v)$ declares $v$ failed. This is strictly faster than
-child-driven detection (children would only notice failure when their own uplink finds no
-relay, which takes $D - d_v$ hops to manifest) and faster than hub-driven detection
-(which requires a full cycle to notice a missing contribution). The parent-driven approach
-is supported by Chitnis et al.\ \citep{chitnis2009} and the proactive multicast recovery
-of Liao et al.\ \citep{liao2007proactive}, who show that parent monitoring minimizes both
-detection latency and false-positive rate compared to child or hub detection.
-
-Once $\mathrm{par}(v)$ detects failure, it notifies $v$'s children
-$\mathrm{ch}(v)$ directly via $G$-edges (it knows $\mathrm{ch}(v)$ because $v$'s
-children sent uplink packets through $v$ to $\mathrm{par}(v)$ in prior rounds, revealing
-their identities). It pushes the re-attachment assignment to each child in one message,
-eliminating the need for children to independently scan their neighborhood.
-
-\paragraph{Precomputed swap edges.} Rather than scanning $G$-neighbors at failure time,
-each node $c$ precomputes a \emph{swap parent} $u_c$ during tree construction, following
-the best-swap-edge framework of Nardelli et al.\ \citep{nardelli2003} and its distributed
-variant by Datta et al.\ \citep{datta2013}. The swap parent minimizes the maximum depth
-increase across $c$'s entire subtree, not just $c$'s own depth:
-\[
-    u_c = \arg\min_{u \in \mathcal{N}_G(c) \setminus \{v\}} \max_{\ell \in \mathrm{subtree}(c)} (d_u + 1 + d_\ell - d_c),
-\]
-where $d_\ell - d_c$ is the depth of $\ell$ within $c$'s subtree. This precomputation
-requires one extra message per node during the tree construction phase (each node
-broadcasts its depth to its $G$-neighbors), costs $O(|E|)$ total messages, and
-eliminates any on-the-fly neighbor scanning at failure time. Re-attachment then takes
-exactly 1 round: $\mathrm{par}(v)$ pushes the swap assignments, each child $c$ sets
-$\mathrm{par}(c) \leftarrow u_c$ and updates its depth as
-\[
-    d_c' = d_{u_c} + 1,
-\]
-and propagates the shift to every descendant $\ell$ in its subtree:
-\[
-    d_\ell' = d_c' + (d_\ell - d_c).
-\]
-The whole subtree of $c$ shifts uniformly by the offset $d_{u_c} + 1 - d_c$, so the
-relative structure within the subtree is preserved.
-
-\paragraph{Depth increase.} If $v$ was the only node at depth $d_v$ on the path between
-some leaf $\ell$ and the hub, re-attachment may increase the depth of $\ell$'s subtree.
-In the worst case, if $c$ has no neighbor at depth $d_v - 1$ other than $v$, it must
-attach to a node at depth $d_v$, making its own depth $d_v + 1$ and pushing all
-descendants down by one level. The new tree depth is
-\[
-    D' = \max\bigl(D_{\mathrm{rest}},\ \max_{c \in \mathrm{ch}(v)} (d_{u_c} + 1 + d_c^{\max} - d_c)\bigr),
-\]
-where $D_{\mathrm{rest}}$ is the depth of the unaffected part of the tree and
-$d_c^{\max}$ is the depth of the deepest leaf in $c$'s subtree before re-attachment.
-The hub learns $D'$ via the next uplink: every node piggybacks its current depth, so
-the hub takes the max over all received values. In the extreme case of a chain graph
-where $v$ is the unique intermediate node at depth $d_v$, this gives $D' = D + 1$.
-
-\paragraph{Consequence for the protocol.} A depth increase changes the cycle length from
-$2D + 1$ to $2D' + 1$. The hub must broadcast the updated $D'$ in the next downlink so
-all agents synchronize on the new cycle length. This requires one extra downlink field,
-identical to the depth signal already present in the protocol. No other structural change
-is needed: the bandit algorithm running at the hub is unaffected, and all live agents
-continue routing toward the hub via their updated parent pointers.
-
-\begin{proposition}[Non-hub failover correctness]
-\label{prop:nonhub}
-    After re-attachment of all orphaned children of a failed node $v$, the remaining live
-    nodes form a valid spanning tree rooted at $h^\star$ (or $b^\star$ if hub failover
-    has already occurred) with height $D' \leq D + |\mathrm{ch}(v)|$. No cycles are
-    introduced.
-\end{proposition}
-
-\begin{proof}
-    Before failure, $\mathcal{T}$ is a directed tree. Remove $v$: the result is a forest
-    with one subtree rooted at each $c \in \mathrm{ch}(v)$ and one subtree containing the
-    hub. By 2-connectivity of $G$ (Definition~\ref{def:2conn}), $G \setminus \{v\}$ is
-    connected, so each orphaned child $c$ has at least one live $G$-neighbor $u_c \in
-    \mathcal{N}_G(c) \setminus \{v\}$ (which may be a tree edge to a sibling subtree or
-    a non-tree edge of $G$) with finite depth. Since $G \setminus \{v\}$ is connected and
-    the hub is in $G \setminus \{v\}$, $u_c$ lies in the hub's component. We select $u_c$
-    with $d_{u_c} < d_c$, which is possible because $u_c$ is not itself an orphan (only
-    children of $v$ are orphaned under single node failure) and thus has a well-defined
-    depth. Adding the directed edge $c \to u_c$ connects $c$'s subtree to the hub's
-    component. No cycle forms: $u_c$ routes toward the hub and not through $c$. Repeating
-    for each $c \in \mathrm{ch}(v)$ merges all orphaned subtrees into the hub's component.
-    The depth of any node in $c$'s
-    subtree increases by at most 1 per re-attachment; since there are $|\mathrm{ch}(v)|$
-    orphaned children, $D' \leq D + |\mathrm{ch}(v)|$.
-\end{proof}
-
-\begin{remark}
-    In practice $|\mathrm{ch}(v)|$ is small (the tree degree of an intermediate node),
-    so the depth increase is bounded and modest. On graphs with high connectivity,
-    orphaned children typically find a neighbor at the same or lower depth, giving
-    $D' = D$ with no cycle length change at all.
-\end{remark}
 
 \subsubsection{Remaining Limitations}
 
@@ -958,53 +963,76 @@ Figure~\ref{fig:relay_cycle} illustrates one full relay cycle on a depth-2 tree 
 \section{Full Algorithm Pseudocode}
 \label{app:pseudocode}
 
+Regret minimization and best arm identification are both instances of a single generic protocol, \merw{} (Algorithm~\ref{alg:merw-generic}): after the shared setup phase (distributed power iteration and max-flooding, Appendices~\ref{app:poweriter}--\ref{app:flooding}), every node initializes its local state and every cycle thereafter repeats the same four phases -- \textbf{Initialization}, \textbf{Pull}, \textbf{Uplink} ($D$ rounds), \textbf{Hub decision} (1 round, hub-local), \textbf{Downlink} ($D$ rounds) -- with three application-specific hooks left abstract: $\textsc{Init}$, $\textsc{LocalPull}$, and $\textsc{HubDecide}$. Table~\ref{tab:instantiations} instantiates all three hooks for the two applications studied in this paper; any other decentralized cooperative-learning task whose decision rule depends only on globally aggregated per-agent statistics (in the sense of Theorem~\ref{thm:coordinator}) can be run over the same tree by supplying a different set of hooks.
+
 \begin{algorithm}[H]
-\caption{\merw}
-\label{alg:merw}
+\caption{\merw{} (generic protocol)}
+\label{alg:merw-generic}
 \begin{algorithmic}[1]
-\Require Graph $G$, arms $K$, horizon $T$, UCB constant $c$
+\Require Graph $G$; application-specific hooks $\textsc{Init}$, $\textsc{LocalPull}$, $\textsc{HubDecide}$; stopping condition on $t$ or on a hub-computed flag $\mathrm{done}$
 \State Compute $\tilde{\psi}$ via distributed power iteration (Appendix~\ref{app:poweriter})
-\State Run max-flooding until no agent updates its value; each local maximum $\ell$ with $m_{\mathrm{via}_\ell} > \tilde{\psi}_\ell$ re-routes via $\mathrm{via}_\ell$
+\State Run max-flooding and re-route local maxima toward the global maximum (Appendix~\ref{app:flooding})
 \State Single spanning tree $\mathcal{T}$ with root $h^\star$; each node knows $\mathrm{par}(i)$, $\mathrm{ch}(i)$, $d_i$, $D$
-\State Every agent $i \in V$ pulls each arm $k$ once (not counted in regret): $\hat{n}_i^k \leftarrow 1$, $\hat{s}_i^k \leftarrow r_i^k$
+\State $t \leftarrow 0$;\quad $\mathrm{done} \leftarrow \textbf{false}$ \Comment{$t$: wall-clock round, tracked locally by every node}
 
-\State \textcolor{gray}{$\triangleright$ \textbf{Cycle kick-off}}
+\State \textcolor{gray}{$\triangleright$ \textbf{Initialization Phase}}
 \ForAll{$i \in V$}
-    \State $a_i \leftarrow \arg\max_k \bigl[\hat{s}_i^k/\hat{n}_i^k + \sqrt{c\log P/\hat{n}_i^k}\bigr]$;\quad pull $a_i$, observe $r_i$
+    \State $\sigma_i \leftarrow \textsc{Init}()$;\quad $t \mathrel{+}= (\text{rounds consumed by this call})$
 \EndFor
-\ForAll{$i \in V \setminus \{h^\star\}$} send $(a_i,\, r_i)$ to $\mathrm{par}(i)$ \EndFor
-\State $t_{\mathrm{cycle}} \leftarrow t$;\quad $t \mathrel{+}= 1$
 
-\While{$t < T$}
-    \State \textcolor{gray}{$\triangleright$ \textbf{Hub}}
-    \If{uplink packet $(a, r)$ arrives}
-        \State $\hat{n}^a \mathrel{+}= 1$;\quad $\hat{s}^a \mathrel{+}= r$;\quad $t_{\mathrm{last}} \leftarrow t$
-    \EndIf
-    \If{uplink buffer empty}
-        \State $D \leftarrow t_{\mathrm{last}} - t_{\mathrm{cycle}}$
-        \State $P \mathrel{+}= |\text{uplink messages received}| + 1$ \Comment{non-hub pulls + hub pull}
-        \State $a_h \leftarrow \arg\max_k \bigl[\hat{s}^k/\hat{n}^k + \sqrt{c\log P/\hat{n}^k}\bigr]$;\quad pull $a_h$;\quad $\hat{n}^{a_h} \mathrel{+}= 1$, $\hat{s}^{a_h} \mathrel{+}= r$
-        \State send $(\hat{n},\; \hat{s},\; D,\; P,\; \mathrm{hops}{=}0)$ to each child in $\mathrm{ch}(h^\star)$
-    \EndIf
-    \State \textcolor{gray}{$\triangleright$ \textbf{Non-hub nodes}}
-    \ForAll{$i \in V \setminus \{h^\star\}$}
-        \If{$i$ holds an uplink packet $(a, r)$}
-            \State forward $(a, r)$ to $\mathrm{par}(i)$;\quad go silent
-        \ElsIf{$i$ received downlink $(\hat{n}, \hat{s}, D, \mathrm{hops})$}
-            \State $\hat{n}_i \leftarrow \hat{n}$;\quad $\hat{s}_i \leftarrow \hat{s}$;\quad $P_i \leftarrow P$
-            \State forward $(\hat{n},\; \hat{s},\; D,\; P,\; \mathrm{hops}{+}1)$ to each child in $\mathrm{ch}(i)$
-            \State schedule pull at $t + (D - \mathrm{hops} - 1)$
-        \ElsIf{scheduled pull time $= t$}
-            \State $a_i \leftarrow \arg\max_k \bigl[\hat{s}_i^k/\hat{n}_i^k + \sqrt{c\log P/\hat{n}_i^k}\bigr]$;\quad pull $a_i$, observe $r_i$
-            \State send $(a_i, r_i)$ to $\mathrm{par}(i)$;\quad $t_{\mathrm{cycle}} \leftarrow t$
-        \Else
-            \State go silent
-        \EndIf
+\Repeat
+    \State \textcolor{gray}{$\triangleright$ \textbf{Pull phase}}
+    \ForAll{$i \in V$}
+        \State $(b_i, \sigma_i) \leftarrow \textsc{LocalPull}(\sigma_i)$
+        \State $t \mathrel{+}= (\text{rounds consumed by this call})$
     \EndFor
+
+    \State \textcolor{gray}{$\triangleright$ \textbf{Uplink}}
+    \ForAll{$i \in V \setminus \{h^\star\}$} send $b_i$ to $\mathrm{par}(i)$;\quad $b_i \leftarrow \mathbf{0}$ \EndFor
+    \Repeat
+        \State $t \mathrel{+}= 1$;\quad hub absorbs any packets received this round into $B$
+        \ForAll{$i \in V \setminus \{h^\star\}$}
+            \If{$i$ received a packet from a child this round}
+                \State $b_i \mathrel{+}= (\text{sum of packets received})$;\quad send $b_i$ to $\mathrm{par}(i)$;\quad $b_i \leftarrow \mathbf{0}$ 
+            \EndIf
+        \EndFor
+    \Until{hub receives nothing this round} 
+
+    \State \textcolor{gray}{$\triangleright$ \textbf{Hub decision} ($t \mathrel{+}= 1$, hub-local)}
+    \State $(m, \mathrm{done}) \leftarrow \textsc{HubDecide}(B)$ \Comment{$m$: the message broadcast on the downlink (running aggregate, surviving set, etc.); $\mathrm{done}$ uses no information the hub doesn't already have}
     \State $t \mathrel{+}= 1$
-\EndWhile
+
+    \State \textcolor{gray}{$\triangleright$ \textbf{Downlink} ($D$ rounds)}
+    \State send $(m,\, D,\, \mathrm{done},\, \mathrm{hops}{=}0)$ to each child in $\mathrm{ch}(h^\star)$
+    \For{$d = 1$ \textbf{to} $D$}
+        \ForAll{$i \in V$ with $d_i = d$}
+            \State on receipt of $(m, D, \mathrm{done}, \mathrm{hops})$: update $\sigma_i$ from $m$; forward $(m, D, \mathrm{done}, \mathrm{hops}{+}1)$ to each child in $\mathrm{ch}(i)$ \Comment{$i$ never independently evaluates the stopping condition; it only learns $\mathrm{done}$ from the packet}
+        \EndFor
+        \State $t \mathrel{+}= 1$
+    \EndFor
+\Until{$\mathrm{done}$ \textbf{or} $t \geq T$ (whichever stopping condition applies)}
 \end{algorithmic}
 \end{algorithm}
+
+\begin{table}[H]
+\centering
+\caption{Instantiating Algorithm~\ref{alg:merw-generic} for the two applications of this paper.}
+\label{tab:instantiations}
+\begin{tabular}{p{0.19\textwidth}p{0.36\textwidth}p{0.36\textwidth}}
+\toprule
+ & \merw-UCB (Section~\ref{sec:regret}) & \merw-BAI (Section~\ref{sec:bai}) \\
+\midrule
+$\textsc{Init}$ & pull every arm $k \in \{1,\ldots,K\}$ once; $\sigma_i \leftarrow (\hat n_i, \hat s_i)$, $K$ rounds & $\sigma_i \leftarrow S_0 = \{1,\ldots,K\}$, 0 rounds (no pulls needed) \\
+$\textsc{LocalPull}$ & pull $a_i = \arg\max_k[\hat s_i^k/\hat n_i^k + \sqrt{c\log \max(P,1)/\hat n_i^k}]$; 1 round & pull every $k \in S_{r-1}$ exactly $L_r$ times; $L_r$ rounds ($L_r$, $\epsilon_r$ pre-agreed from $N,K,\delta$) \\
+Uplink payload $b_i$ & new $(\hat n_i, \hat s_i)$ observations & local sums $\{s_k^{(i)}\}_{k \in S_{r-1}}$ \\
+$\textsc{HubDecide}$ & $P \mathrel{+}= N$; pull $a_h$ via UCB on $B=(\hat n,\hat s)$; $P\mathrel{+}=1$; never stops early ($\mathrm{done} = (t \geq T)$) & $\tilde p_k \leftarrow B_k/(N L_r)$; $S_r \leftarrow \{k : \tilde p_k \geq \max_j \tilde p_j - \epsilon_r\}$; $\mathrm{done} = (|S_r|=1)$; hub never pulls \\
+Downlink payload $m$ & full aggregate $(\hat n, \hat s, P)$ & surviving set $S_r$ only \\
+Cycle length & fixed, $2D+1$ & varies, $L_r + 2D$ (shrinks as $\epsilon_r$ tightens) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The two instantiations differ only in these five rows; the surrounding relay mechanics -- the hop-by-hop uplink fold, the hub-only stopping check, and the hop-by-hop downlink broadcast -- are identical, since they are exactly the aggregation and broadcast primitives of Propositions~\ref{prop:aggregation}--\ref{prop:broadcast} that make Theorem~\ref{thm:coordinator} apply to any hook pair whose $\textsc{HubDecide}$ depends only on the aggregated $B$.
 
 \section{Additional Regret Results}
 \label{app:regret}
