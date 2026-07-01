@@ -5,6 +5,8 @@
 *.out
 *.toc
 *.synctex.gz
+*.bbl
+*.blg
 *.pdf
 *.svg
 __pycache__/
