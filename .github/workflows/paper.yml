@@ -32,7 +32,9 @@ jobs:
             latexmk \
             texlive-latex-extra \
             texlive-fonts-recommended \
-            texlive-science
+            texlive-science \
+            cm-super \
+            dvipng
 
       - name: Build paper
         run: make
