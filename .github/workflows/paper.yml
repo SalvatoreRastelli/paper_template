@@ -32,6 +32,7 @@ jobs:
             latexmk \
             texlive-latex-extra \
             texlive-fonts-recommended \
+            texlive-fonts-extra \
             texlive-science \
             cm-super \
             dvipng
@@ -44,5 +45,5 @@ jobs:
         with:
           name: paper-pdf
           path: |
-            paper/merw_ucb.pdf
-            paper/merw_fault_tolerant.pdf
+            paper/aaai/main.pdf
+            paper/arxiv/main.pdf
