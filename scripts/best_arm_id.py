@@ -94,8 +94,9 @@ def make_ba_graph(N, m=2, seed=None):
     raise RuntimeError("Could not generate a connected BA graph.")
 
 
-def make_er_graph(N, seed=None):
-    p = 2.5 * np.log(N) / N
+def make_er_graph(N, seed=None, p=None):
+    if p is None:
+        p = 2.5 * np.log(N) / N
     rng = np.random.RandomState(seed)
     for _ in range(100):
         G = nx.erdos_renyi_graph(N, p, seed=int(rng.randint(0, 2**31)))
@@ -104,11 +105,11 @@ def make_er_graph(N, seed=None):
     raise RuntimeError("Could not generate a connected ER graph.")
 
 
-def make_graph(graph_type, N, seed=None):
+def make_graph(graph_type, N, seed=None, p=None):
     if graph_type == "ba":
         return make_ba_graph(N, m=2, seed=seed)
     elif graph_type == "er":
-        return make_er_graph(N, seed=seed)
+        return make_er_graph(N, seed=seed, p=p)
     raise ValueError(f"Unknown graph type: {graph_type}")
 
 
@@ -794,9 +795,9 @@ def _worker(task):
 
 def _worker_bai(task):
     (algo_name, run_seed, graph_seed, graph_type, N, K,
-     means, sigma, delta, c, nu) = task
+     means, sigma, delta, c, nu, p) = task
     np.random.seed(run_seed)
-    G = make_graph(graph_type, N, seed=graph_seed)
+    G = make_graph(graph_type, N, seed=graph_seed, p=p)
     env = BanditEnv(means, sigma=sigma)
 
     if algo_name == "Hillel-BAI":
@@ -988,7 +989,7 @@ def _bai_csv_path(graph_type, K):
 
 
 def compute_bai_data(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
-                     delta=0.05, seed=2):
+                     delta=0.05, seed=2, p=None):
     """
     Sweeps N (number of agents) and measures total arm pulls for BAI.
     Hillel theory predicts O(1/N) pulls per agent => O(1) total pulls
@@ -1007,7 +1008,7 @@ def compute_bai_data(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
             run_seed = int(sub_rng.randint(0, 2**31))
             for name in BAI_ALGO_NAMES:
                 sub_tasks.append((name, run_seed, graph_seed, graph_type,
-                                  N, K, means, sigma, delta, c, nu))
+                                  N, K, means, sigma, delta, c, nu, p))
 
         pulls_by_algo = {name: [] for name in BAI_ALGO_NAMES}
         nw = min(n_workers, max(1, len(sub_tasks)))
@@ -1106,10 +1107,10 @@ def plot_bai(results, graph_type, K, n_runs, delta=0.05):
 
 
 def run_bai_experiment(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
-                       delta=0.05, seed=2, mode="all"):
+                       delta=0.05, seed=2, mode="all", p=None):
     if mode in ("compute", "all"):
         results = compute_bai_data(n_runs, K, graph_type, sigma, c, n_workers,
-                                    nu=nu, delta=delta, seed=seed)
+                                    nu=nu, delta=delta, seed=seed, p=p)
         save_bai_csv(results, graph_type, K)
     if mode == "compute":
         return
@@ -1140,6 +1141,8 @@ def parse_args():
                    help="Number of arms")
     p.add_argument("--graph",     choices=("ba", "er"), default="ba",
                    help="Graph type: ba=Barabasi-Albert, er=Erdos-Renyi")
+    p.add_argument("--p-er",      type=float, default=None,
+                   help="ER edge probability override (default: 2.5*ln(N)/N; ignored for ba)")
     p.add_argument("--sigma",     type=float, default=1.0,
                    help="Reward noise std (Normal rewards)")
     p.add_argument("--c",         type=float, default=2.0,
@@ -1177,5 +1180,6 @@ if __name__ == "__main__":
         nu=args.nu,
         delta=args.delta,
         mode=args.mode,
+        p=args.p_er,
     )
     print(f"\nTotal runtime: {time.time() - start:.2f}s")

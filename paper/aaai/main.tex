@@ -16,8 +16,10 @@
 
 \newtheorem{proposition}{Proposition}
 \newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
 \newtheorem{corollary}{Corollary}
 \newtheorem{definition}{Definition}
+\newtheorem{conjecture}{Conjecture}
 
 \pdfinfo{
 /TemplateVersion (2027.1)
@@ -69,6 +71,8 @@ The emergent-coordinator design has one structural weakness: the hub is a single
 \paragraph{Eigenvector centrality and decentralized computation.} The Maximal Entropy Random Walk \citep{burda2009localization} provides an information-theoretic grounding for eigenvector centrality: $\psi_i$ is the unique centrality consistent with assigning equal probability to all paths of equal length, and $\psi_i^2$ concentrates sharply on a small set of nodes in heterogeneous graphs. Jelasity et al.\ \citep{jelasity2007asynchronous} give a gossip-based normalization for distributed power iteration that avoids a global all-reduce, which we use directly to compute $\psi$ without any agent ever knowing $N$.
 
 \paragraph{Fault tolerance in tree-structured coordination.} The passive-backup pattern underlying \merwft{} is standard in distributed systems: OSPF's Backup Designated Router \citep{rfc2328} and RSTP's Alternate Port \citep{ieee8021w} both pre-identify a successor that promotes itself locally upon primary failure. Lamport, Malkhi and Zhou \citep{lamport2009vertical} formalize passive replication as a special case of Paxos, establishing that a mirroring backup is at most one synchronization round stale; \merwft{} applies this pattern to the aggregation-tree setting, and additionally handles non-hub failure via the swap-edge framework of Nardelli et al.\ \citep{nardelli2003}.
+
+\paragraph{Minimum-diameter spanning trees.} Choosing the coordinator to directly minimize the routing tree's diameter is a solved problem: the optimal root is the graph's absolute center, and a shortest-path tree rooted there is a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. This has been made fully distributed \citep{bui2013distributed,butelle1995selfstabilizing}, including a self-stabilizing version that recovers after a fault. These methods are exact, but the cost is structural: computing the absolute center requires every node to hold all-pairs shortest-path information, i.e., full topological knowledge of $G$, not just its own neighborhood: $O(n)$ per-node distance entries at minimum, and $O(n^2)$ total network state \citep{bui2013distributed}. A permanent node failure changes the graph itself, so the center may move, and the construction -- or, in the self-stabilizing variant, a full reconvergence over the network -- must run again, with no bounded, localized way to react to a single failure. \merw{} makes the opposite trade-off: the hub is chosen from local gossip alone, with no agent ever storing distances to more than its immediate neighbors, and \merwft{} recovers from a single hub failure in a number of rounds bounded by the tree depth $D$, using a precomputed backup, rather than reconverging the whole network. Section~\ref{sec:mdst-gap} quantifies what this costs in tree diameter.
 
 \section{EigenTree: The Protocol}
 \label{sec:merw}
@@ -145,10 +149,46 @@ Downlink $m$ & aggregate $(\hat n,\hat s,P)$ & surviving set $S_r$ \\
 
 \begin{figure}[tb]
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/MERW_visualization/merw_tree_ba_N20.pdf}
-    \caption{MERW centrality and routing tree on a Barab\'{a}si--Albert graph ($N=20$). \emph{Left}: undirected graph, nodes colored by $\psi_i/\psi_{\max}$. \emph{Center}: routing subtree overlaid on the graph, hub ringed in gold. \emph{Right}: induced directed tree, hierarchical layout, arrows child $\to$ parent.}
-    \label{fig:merw_viz_ba}
+    \includegraphics[width=0.95\columnwidth]{results/MERW_visualization/merw_tree_er_N20.pdf}
+    \caption{MERW centrality and routing tree on an Erd\H{o}s--R\'{e}nyi graph ($N=20$). \emph{Left}: undirected graph, nodes colored by $\psi_i/\psi_{\max}$. \emph{Center}: routing subtree overlaid on the graph, hub ringed in gold. \emph{Right}: induced directed tree, hierarchical layout, arrows child $\to$ parent.}
+    \label{fig:merw_viz_er}
 \end{figure}
+
+\subsection{Cost of Not Using the Minimum Diameter Tree}
+\label{sec:mdst-gap}
+
+\merw{} roots its tree at $h^\star$, the highest-centrality node, not at the graph's absolute center -- the root that would minimize tree depth, giving a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. So the tree depth $D = \mathrm{ecc}_G(h^\star)$ can exceed $D' = R(G)$, the depth the MDST would achieve. We characterize this gap in three regimes: an unrestricted worst case, a dense-graph case where it is provably small, and the intermediate 2-connected case relevant to Section~\ref{sec:ft}.
+
+\paragraph{Worst case.} Take a graph formed by attaching a high-degree cluster to the end of a long path: $h^\star$ settles inside the cluster, since that is where centrality concentrates, while the true center sits near the path's midpoint. As the path grows, $D$ approaches $2D'$, matching the tight general bound $D' \geq D(G)/2$ that holds for \emph{any} choice of root \citep{hakimi1964}; \merw{}'s hub does no better than an arbitrary one here. This construction has a cut vertex on the path.
+
+\begin{proposition}[Hub degree lower bound]
+\label{prop:hubdeg}
+$\deg(h^\star) \geq \lambda$, the spectral radius of $G$.
+\end{proposition}
+\begin{proof}
+From $A\tilde\psi = \lambda\tilde\psi$, $\lambda\tilde\psi_{h^\star} = \sum_{j\sim h^\star}\tilde\psi_j \leq \deg(h^\star)\tilde\psi_{h^\star}$, since $\tilde\psi_{h^\star} = \max_k \tilde\psi_k$. Dividing by $\tilde\psi_{h^\star} > 0$ gives the claim.
+\end{proof}
+
+\begin{theorem}[Dense graphs: depth at most 2]
+\label{thm:mdst-gap}
+Let $\delta_{\bar N}(h^\star)$ be the smallest degree among the nodes $h^\star$ is not directly connected to. If $\deg(h^\star) + \delta_{\bar N}(h^\star) \geq n$, then $D \leq 2$.
+\end{theorem}
+\begin{proof}
+Take any node $u$ that is not $h^\star$ and not one of its neighbors. Counting $h^\star$'s neighbors and $u$'s neighbors together, $|N(h^\star)| + |N(u)| \geq \deg(h^\star) + \delta_{\bar N}(h^\star) \geq n$, which is more than the $n-2$ nodes other than $h^\star$ and $u$ that these neighbors could possibly be drawn from. So the two neighbor sets must overlap: $h^\star$ and $u$ share a common neighbor, and $d(h^\star, u) \leq 2$. This holds for every such $u$, so $D = \mathrm{ecc}_G(h^\star) \leq 2$.
+\end{proof}
+
+Since $D' \geq 1$ on any connected graph with more than one node, Theorem~\ref{thm:mdst-gap} says \merw{}'s tree is at most one hop deeper than the true MDST whenever this condition holds, and by Proposition~\ref{prop:hubdeg} it is easier to satisfy the more concentrated $G$'s spectral radius $\lambda$ is, without requiring every node in $G$ to be well-connected -- only $h^\star$ and the nodes outside its immediate neighborhood.
+
+\paragraph{2-connected graphs.} Theorem~\ref{thm:mdst-gap}'s hypothesis is a strong density requirement. A weaker, purely topological condition -- $G$ remaining connected after removing any single node -- is also the exact requirement Section~\ref{sec:ft} places on $G$ for hub failover to work at all, so it is already assumed elsewhere in this paper.
+
+\begin{conjecture}[Depth gap under 2-connectivity]
+\label{conj:mdst-2conn}
+If $G$ is 2-connected, then $D \leq D' + 1$.
+\end{conjecture}
+
+We tested Conjecture~\ref{conj:mdst-2conn} against counterexamples on over 8000 random 2-connected Erd\H{o}s--R\'{e}nyi graphs, $n \in [5,50]$ and $p \in [0.05, 0.6]$, including hand-constructed theta graphs (a cycle plus one extra path joining two of its nodes) and dense-cluster-with-two-disjoint-paths graphs designed to stress the bound: no violation was found. We were not able to prove it, and are not aware of an existing theorem of this form; the closest related result bounds any vertex's eccentricity by twice the radius with no connectivity assumption \citep{buckleyharary1990}, a substantially weaker guarantee. We leave the proof as an open problem.
+
+\merw{} does not try to avoid the worst case directly: doing so would require the same all-pairs distance information that exact MDST construction depends on (Section~\ref{sec:related}), which is precisely the global knowledge \merw{} is designed to do without.
 
 \subsection{Instantiation: Regret Minimization}
 \label{sec:regret}
@@ -183,10 +223,20 @@ Every node in $\mathcal{T}$ is a potential failure point, and \merwft{} must acc
 At the end of any cycle, $b^\star$'s stored state equals the hub's state after the hub's own pull that cycle. If the hub fails during the next cycle, the backup's state is at most one full cycle stale.
 \end{proposition}
 
-Upon detecting hub silence via timeout, $b^\star$ (1) self-promotes, assuming the root role using its stored state; (2) floods a promotion message over graph edges (not tree edges, since $b^\star$ shares no tree edge with its former siblings) to notify them, so they re-route through $b^\star$; (3) recomputes and broadcasts the new tree height $D'$; and (4) resumes the protocol immediately. This requires the graph to be 2-connected, so that former siblings retain a path to $b^\star$ after the hub is removed.
+Upon detecting hub silence via timeout, $b^\star$ (1) self-promotes, assuming the root role using its stored state; (2) floods a promotion message over graph edges (not tree edges, since $b^\star$ shares no tree edge with its former siblings) to notify them, so they re-route through $b^\star$; (3) recomputes and broadcasts the new tree height $D_{\mathrm{new}}$; and (4) resumes the protocol immediately. This requires the graph to be 2-connected, so that former siblings retain a path to $b^\star$ after the hub is removed.
+
+\begin{proposition}[Density implies 2-connectivity]
+\label{prop:dense-2conn}
+If $\delta(G) \geq n/2$, where $\delta(G)$ is the minimum degree over all nodes, then $G$ is 2-connected.
+\end{proposition}
+\begin{proof}
+Suppose not: some node $v$ is a cut vertex, so $G - v$ splits into components $C_1, \dots, C_m$ ($m\geq2$). Let $u$ be in the smallest such component, of size at most $\lfloor(n-1)/2\rfloor$. Every neighbor of $u$ is either $v$ or another node of that same component, so $\deg(u) \leq \lfloor(n-1)/2\rfloor < n/2$, contradicting $\delta(G) \geq n/2$.
+\end{proof}
+
+This is a strong requirement -- every node needs a neighborhood covering roughly half the network -- but it holds without exception once satisfied, unlike the empirical regularity of Conjecture~\ref{conj:mdst-2conn} below.
 
 \begin{proposition}[Failover correctness and completeness]
-After promotion, the network forms a valid spanning tree rooted at $b^\star$ with height $D' \leq D+1$ and no cycles. The procedure completes in $O(\mathrm{diam}(G))$ rounds in general, and $O(1)$ rounds when $b^\star$ is directly connected to all former siblings.
+After promotion, the network forms a valid spanning tree rooted at $b^\star$ with height $D_{\mathrm{new}} \leq D+1$ and no cycles. The procedure completes in $O(\mathrm{diam}(G))$ rounds in general, and $O(1)$ rounds when $b^\star$ is directly connected to all former siblings.
 \end{proposition}
 
 A subtlety arises during the (possibly multi-round) re-routing step: siblings that are themselves internal nodes have not yet forwarded a downlink to their own subtrees, which could otherwise cause a cascade of spurious non-hub failovers as descendants time out waiting for a parent that is mid-reroute. We resolve this with a lightweight \textsc{Hold} signal, piggybacked on the existing downlink mechanism, that a re-routing sibling forwards immediately to its subtree to suspend timeouts until re-routing completes. The backup-selection and promotion procedures apply recursively, so \merwft{} tolerates any finite sequence of hub failures: each promoted hub re-runs the same selection procedure to name its own successor.
@@ -196,43 +246,29 @@ A subtlety arises during the (possibly multi-round) re-routing step: siblings th
 When a non-hub node $v$ at depth $d_v$ fails, the impact is local: only the subtree rooted at $v$ is disrupted. Failure is detected by $v$'s parent, the fastest possible locus of detection (children would take $D-d_v$ hops to notice, and the hub a full cycle). Rather than scanning neighbors at failure time, each node precomputes a \emph{swap parent} once depths are established after the first cycle, following the best-swap-edge framework of Nardelli et al.\ \citep{nardelli2003}, minimizing the maximum depth increase across its subtree. Re-attachment then takes exactly one round.
 
 \begin{proposition}[Non-hub failover correctness]
-After re-attachment of all orphaned children of a failed node $v$, the remaining live nodes form a valid spanning tree with height $D' \leq D + |\mathrm{ch}(v)|$ and no cycles.
+After re-attachment of all orphaned children of a failed node $v$, the remaining live nodes form a valid spanning tree with height $D_{\mathrm{new}} \leq D + |\mathrm{ch}(v)|$ and no cycles.
 \end{proposition}
 
 \section{Experiments}
 \label{sec:experiments}
 
-We evaluate both instantiations on two graph families: Barab\'{a}si--Albert (BA), where the MERW hub concentrates on the highest-degree node (Figure~\ref{fig:merw_viz_ba}), and Erd\H{o}s--R\'{e}nyi (ER), where centrality is more spread but still identifies a clear hub.
+We evaluate both instantiations on Erd\H{o}s--R\'{e}nyi (ER) graphs, where centrality is spread across several nodes but still identifies a clear hub (Figure~\ref{fig:merw_viz_er}).
 
-For regret minimization ($N=20$, $K=5$, $T=5000$, 50 runs; Figure~\ref{fig:regret_ba}), the hub, identified without any central authority, coordinates the network to logarithmic group regret while non-hub agents accumulate no regret during communication rounds, on both graph families.
-
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=0.95\columnwidth]{results/Regret/relay_regret_ba_N20_K5_T5000.pdf}
-    \caption{Cumulative regret on a Barab\'{a}si--Albert graph ($N=20$, $K=5$, $T=5000$, 50 runs). \emph{Left}: group regret vs.\ round. \emph{Center}: hub regret vs.\ round. \emph{Right}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
-    \label{fig:regret_ba}
-\end{figure}
+For regret minimization ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs; Figure~\ref{fig:regret_er}), the hub, identified without any central authority, coordinates the network to logarithmic group regret while non-hub agents accumulate no regret during communication rounds.
 
 \begin{figure}[tb]
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/Regret/relay_regret_er_N20_K5_T5000.pdf}
-    \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $K=5$, $T=5000$, 50 runs). Panel layout as in Figure~\ref{fig:regret_ba}.}
+    \includegraphics[width=0.95\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
+    \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Left}: group regret vs.\ round. \emph{Center}: hub regret vs.\ round. \emph{Right}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
     \label{fig:regret_er}
 \end{figure}
 
-For best arm identification ($K=10$, $\delta=0.05$, 50 runs per $N$), Figures~\ref{fig:bai} and \ref{fig:bai_er} compare total arm pulls against Hillel's centralized algorithm as a function of $N$, using the same graph and MERW-identified hub for both, on BA and ER graphs respectively.
-
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=0.95\columnwidth]{results/BAI/merw_ucb_bai_ba_K10.pdf}
-    \caption{BAI sample complexity on Barab\'{a}si--Albert graphs ($K=10$, $\delta=0.05$, 50 runs per $N$). \emph{Left}: total arm pulls vs.\ $N$. \emph{Right}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
-    \label{fig:bai}
-\end{figure}
+For best arm identification ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$), Figure~\ref{fig:bai_er} compares total arm pulls against Hillel's centralized algorithm as a function of $N$, using the same graph and MERW-identified hub for both.
 
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.95\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
-    \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, 50 runs per $N$). Panel layout as in Figure~\ref{fig:bai}.}
+    \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Left}: total arm pulls vs.\ $N$. \emph{Right}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
     \label{fig:bai_er}
 \end{figure}
 

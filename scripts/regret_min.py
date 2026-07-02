@@ -105,8 +105,9 @@ def make_ba_graph(N, m=2, seed=None):
     raise RuntimeError("Could not generate a connected BA graph.")
 
 
-def make_er_graph(N, seed=None):
-    p = 2.5 * np.log(N) / N
+def make_er_graph(N, seed=None, p=None):
+    if p is None:
+        p = 2.5 * np.log(N) / N
     rng = np.random.RandomState(seed)
     for _ in range(100):
         G = nx.erdos_renyi_graph(N, p, seed=int(rng.randint(0, 2**31)))
@@ -162,11 +163,11 @@ def make_star_graph(N, seed=None):
     return nx.star_graph(N - 1)
 
 
-def make_graph(graph_type, N, seed=None):
+def make_graph(graph_type, N, seed=None, p=None):
     if graph_type == "ba":
         return make_ba_graph(N, m=2, seed=seed)
     elif graph_type == "er":
-        return make_er_graph(N, seed=seed)
+        return make_er_graph(N, seed=seed, p=p)
     elif graph_type == "barbell":
         return make_barbell_graph(N, seed=seed)
     elif graph_type == "grid":
@@ -991,9 +992,9 @@ def run_central_ucb(env, T, N, c=2.0, sigma=1.0, hub=0):
 # ============================================================
 
 def _worker(task):
-    algo_name, run_seed, graph_seed, graph_type, N, _K, means, sigma, T, c = task
+    algo_name, run_seed, graph_seed, graph_type, N, _K, means, sigma, T, c, p = task
     np.random.seed(run_seed)
-    G = make_graph(graph_type, N, seed=graph_seed)
+    G = make_graph(graph_type, N, seed=graph_seed, p=p)
     env = BanditEnv(means, sigma=sigma)
 
     psi, _ = merw_eigenvector(G, tau=200)
@@ -1052,7 +1053,7 @@ def _csv_path(graph_type, N, K, T):
     return DATA_DIR / f"relay_regret_{graph_type}_N{N}_K{K}_T{T}.csv"
 
 
-def compute_regret_data(n_runs, T, N, K, graph_type, sigma, c, n_workers, seed=0):
+def compute_regret_data(n_runs, T, N, K, graph_type, sigma, c, n_workers, seed=0, p=None):
     """Run the Monte Carlo experiment. Returns {algo: (mean_g, std_g, mean_h, std_h, mean_cp)}."""
     rng = np.random.RandomState(seed)
     means = np.linspace(0.0, 1.0, K)[::-1]
@@ -1063,7 +1064,7 @@ def compute_regret_data(n_runs, T, N, K, graph_type, sigma, c, n_workers, seed=0
         run_seed = int(rng.randint(0, 2**31))
         for name in ALGO_NAMES:
             tasks.append((name, run_seed, graph_seed, graph_type,
-                          N, K, means, sigma, T, c))
+                          N, K, means, sigma, T, c, p))
 
     return _run_parallel(tasks, ALGO_NAMES, n_workers, tag="relay")
 
@@ -1158,9 +1159,9 @@ def plot_regret(results, T, N, K, graph_type, n_runs):
     print(f"  Saved {out1}")
 
 
-def run_experiment(n_runs, T, N, K, graph_type, sigma, c, n_workers, mode="all", seed=0):
+def run_experiment(n_runs, T, N, K, graph_type, sigma, c, n_workers, mode="all", seed=0, p=None):
     if mode in ("compute", "all"):
-        results = compute_regret_data(n_runs, T, N, K, graph_type, sigma, c, n_workers, seed=seed)
+        results = compute_regret_data(n_runs, T, N, K, graph_type, sigma, c, n_workers, seed=seed, p=p)
         save_regret_csv(results, T, N, K, graph_type)
     if mode == "compute":
         return
@@ -1189,6 +1190,8 @@ def parse_args():
     p.add_argument("--N",         type=int,   default=20)
     p.add_argument("--K",         type=int,   default=20)
     p.add_argument("--graph",     choices=("ba", "er", "barbell", "grid", "cycle", "lollipop", "chain", "star"), default="ba")
+    p.add_argument("--p-er",      type=float, default=None,
+                   help="ER edge probability override (default: 2.5*ln(N)/N; ignored for other graph types)")
     p.add_argument("--sigma",     type=float, default=1.0)
     p.add_argument("--c",         type=float, default=2.0)
     p.add_argument("--n-workers", type=int,   default=None)
@@ -1204,8 +1207,8 @@ if __name__ == "__main__":
     n_workers = resolve_n_workers(args.n_workers)
     print(f"[config] graph={args.graph}, N={args.N}, K={args.K}, T={args.T}, "
           f"sigma={args.sigma}, c={args.c}, runs={args.n_runs}, workers={n_workers}, "
-          f"mode={args.mode}")
+          f"mode={args.mode}, p_er={args.p_er}")
     start = time.time()
     run_experiment(args.n_runs, args.T, args.N, args.K,
-                   args.graph, args.sigma, args.c, n_workers, mode=args.mode)
+                   args.graph, args.sigma, args.c, n_workers, mode=args.mode, p=args.p_er)
     print(f"\nTotal runtime: {time.time() - start:.2f}s")
