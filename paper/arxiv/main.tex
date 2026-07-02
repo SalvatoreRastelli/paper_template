@@ -128,7 +128,7 @@ Figures~\ref{fig:merw_viz_ba}--\ref{fig:merw_viz_grid} illustrate the MERW centr
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_ba_N20.pdf}
-    \caption{MERW centrality and routing tree on a Barab\'{a}si--Albert graph ($N=20$). Three panels: \emph{left} -- undirected graph with nodes colored by $\psi_i^2$; \emph{center} -- routing subtree overlaid on the graph, hub ringed in gold; \emph{right} -- induced directed tree in hierarchical layout, hub at top, arrows pointing child $\to$ parent.}
+    \caption{MERW centrality and routing tree on a Barab\'{a}si--Albert graph ($N=20$). Three panels: \emph{left} -- undirected graph with nodes colored by $\psi_i/\psi_{\max}$; \emph{center} -- routing subtree overlaid on the graph, hub ringed in gold; \emph{right} -- induced directed tree in hierarchical layout, hub at top, arrows pointing child $\to$ parent.}
     \label{fig:merw_viz_ba}
 \end{figure}
 
@@ -259,7 +259,7 @@ Every node in $\mathcal{T}$ is a potential failure point, and \merwft{} must acc
 \subsection{Background and Setup}
 \label{sec:ft-setup}
 
-We assume the same setting as \merw: $N$ agents on an undirected connected graph $G = (V, E)$, a spanning tree $\mathcal{T}$ rooted at hub $h^\star$ constructed via \merw{} power iteration and max-flooding, with tree depth $D$ and each node $i$ knowing its parent $\mathrm{par}(i)$, children $\mathrm{ch}(i)$, and depth $d_i$. Each relay cycle consists of an uplink phase ($D$ steps), a hub aggregation step, and a downlink phase ($D$ steps). At the end of each downlink, every node at depth 1 holds the hub's global state $(\hat{n}, \hat{s}, P)$.
+We assume the same setting as \merw: $N$ agents on an undirected connected graph $G = (V, E)$, a spanning tree $\mathcal{T}$ rooted at hub $h^\star$ constructed via \merw{} power iteration and max-flooding. Immediately after max-flooding, each node $i$ knows only its own parent $\mathrm{par}(i)$ (its own routing decision); it does not yet know its children $\mathrm{ch}(i)$, its depth $d_i$, or the tree height $D$. These are discovered over the course of the first cycle: $i$ learns $\mathrm{ch}(i)$ the first time each child routes a packet through it, learns $d_i$ from the hop count carried on the first downlink it receives, and learns $D$ only once the hub has broadcast it -- the hub itself only knows $D$ after observing that its uplink has gone silent for a round. Each relay cycle consists of an uplink phase ($D$ steps), a hub aggregation step, and a downlink phase ($D$ steps). At the end of each downlink, every node at depth 1 holds the hub's global state $(\hat{n}, \hat{s}, P)$.
 
 We add two assumptions not present in the base \merw{} protocol.
 
@@ -521,16 +521,21 @@ their identities). It pushes the re-attachment assignment to each child in one m
 eliminating the need for children to independently scan their neighborhood.
 
 \paragraph{Precomputed swap edges.} Rather than scanning $G$-neighbors at failure time,
-each node $c$ precomputes a \emph{swap parent} $u_c$ during tree construction, following
-the best-swap-edge framework of Nardelli et al.\ \citep{nardelli2003} and its distributed
-variant by Datta et al.\ \citep{datta2013}. The swap parent minimizes the maximum depth
-increase across $c$'s entire subtree, not just $c$'s own depth:
+each node $c$ precomputes a \emph{swap parent} $u_c$ once depths are established,
+following the best-swap-edge framework of Nardelli et al.\ \citep{nardelli2003} and its
+distributed variant by Datta et al.\ \citep{datta2013}. Depths are not known immediately
+after max-flooding (Section~\ref{sec:ft-setup}): each node learns its own $d_i$ only from
+the hop count on the first downlink it receives, during the first bandit cycle. Once
+every node knows its depth, the precomputation runs as a one-shot side computation
+before the next cycle begins: each node broadcasts its depth to its $G$-neighbors, and
+the swap parent minimizes the maximum depth increase across $c$'s entire subtree, not
+just $c$'s own depth:
 \[
     u_c = \arg\min_{u \in \mathcal{N}_G(c) \setminus \{v\}} \max_{\ell \in \mathrm{subtree}(c)} (d_u + 1 + d_\ell - d_c),
 \]
 where $d_\ell - d_c$ is the depth of $\ell$ within $c$'s subtree. This precomputation
-requires one extra message per node during the tree construction phase (each node
-broadcasts its depth to its $G$-neighbors), costs $O(|E|)$ total messages, and
+requires one extra message per node (each node broadcasts its depth to its
+$G$-neighbors once), costs $O(|E|)$ total messages, and
 eliminates any on-the-fly neighbor scanning at failure time. Re-attachment then takes
 exactly 1 round: $\mathrm{par}(v)$ pushes the swap assignments, each child $c$ sets
 $\mathrm{par}(c) \leftarrow u_c$ and updates its depth as
@@ -972,7 +977,7 @@ Regret minimization and best arm identification are both instances of a single g
 \Require Graph $G$; application-specific hooks $\textsc{Init}$, $\textsc{LocalPull}$, $\textsc{HubDecide}$; stopping condition on $t$ or on a hub-computed flag $\mathrm{done}$
 \State Compute $\tilde{\psi}$ via distributed power iteration (Appendix~\ref{app:poweriter})
 \State Run max-flooding and re-route local maxima toward the global maximum (Appendix~\ref{app:flooding})
-\State Single spanning tree $\mathcal{T}$ with root $h^\star$; each node knows $\mathrm{par}(i)$, $\mathrm{ch}(i)$, $d_i$, $D$
+\State Single spanning tree $\mathcal{T}$ with root $h^\star$; each node $i$ knows only its own $\mathrm{par}(i)$ so far -- $\mathrm{ch}(i)$, $d_i$, and $D$ are discovered over the first cycle below
 \State $t \leftarrow 0$;\quad $\mathrm{done} \leftarrow \textbf{false}$ \Comment{$t$: wall-clock round, tracked locally by every node}
 
 \State \textcolor{gray}{$\triangleright$ \textbf{Initialization Phase}}
@@ -1002,14 +1007,16 @@ Regret minimization and best arm identification are both instances of a single g
     \State $(m, \mathrm{done}) \leftarrow \textsc{HubDecide}(B)$ \Comment{$m$: the message broadcast on the downlink (running aggregate, surviving set, etc.); $\mathrm{done}$ uses no information the hub doesn't already have}
     \State $t \mathrel{+}= 1$
 
-    \State \textcolor{gray}{$\triangleright$ \textbf{Downlink} ($D$ rounds)}
-    \State send $(m,\, D,\, \mathrm{done},\, \mathrm{hops}{=}0)$ to each child in $\mathrm{ch}(h^\star)$
-    \For{$d = 1$ \textbf{to} $D$}
-        \ForAll{$i \in V$ with $d_i = d$}
-            \State on receipt of $(m, D, \mathrm{done}, \mathrm{hops})$: update $\sigma_i$ from $m$; forward $(m, D, \mathrm{done}, \mathrm{hops}{+}1)$ to each child in $\mathrm{ch}(i)$ \Comment{$i$ never independently evaluates the stopping condition; it only learns $\mathrm{done}$ from the packet}
-        \EndFor
+    \State \textcolor{gray}{$\triangleright$ \textbf{Downlink} ($D$ rounds -- $D$ is known to the hub, having just observed the uplink go silent for one round; every other node learns $D$ and its own depth $d_i$ from this broadcast, not before}
+    \State hub sends $(m,\, D,\, \mathrm{done},\, \mathrm{hops}{=}0)$ to each child in $\mathrm{ch}(h^\star)$ \Comment{the hub now also knows $\mathrm{ch}(h^\star)$, having just heard from them in the Uplink}
+    \Repeat
         \State $t \mathrel{+}= 1$
-    \EndFor
+        \ForAll{$i \in V \setminus \{h^\star\}$}
+            \If{$i$ received $(m, D, \mathrm{done}, \mathrm{hops})$ this round}
+                \State $d_i \leftarrow \mathrm{hops} + 1$;\quad update $\sigma_i$ from $m$;\quad forward $(m, D, \mathrm{done}, \mathrm{hops}{+}1)$ to each child in $\mathrm{ch}(i)$ \Comment{purely local: $i$ only ever reacts to the packet it just received, and $\mathrm{ch}(i)$ is whichever nodes route through $i$}
+            \EndIf
+        \EndFor
+    \Until{$D$ rounds have elapsed since the hub sent} \Comment{$i$ never independently evaluates the stopping condition; it only learns $\mathrm{done}$ from the packet}
 \Until{$\mathrm{done}$ \textbf{or} $t \geq T$ (whichever stopping condition applies)}
 \end{algorithmic}
 \end{algorithm}

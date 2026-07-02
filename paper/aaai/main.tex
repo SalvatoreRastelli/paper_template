@@ -10,10 +10,14 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{booktabs}
 
 \newtheorem{proposition}{Proposition}
 \newtheorem{theorem}{Theorem}
 \newtheorem{corollary}{Corollary}
+\newtheorem{definition}{Definition}
 
 \pdfinfo{
 /TemplateVersion (2027.1)
@@ -47,72 +51,160 @@ The resulting protocol can be directly used in various decentralized cooperative
 
 \section{Introduction}
 
-In the cooperative multi-agent multi-armed bandit (MA-MAB) setting, $N$ agents are connected by an undirected graph $G = (V, E)$. At each round, every agent pulls one arm and receives a stochastic reward; agents communicate with neighbors to improve collective performance. Two objectives are studied: \emph{regret minimization}, where the goal is to minimize cumulative group regret over a horizon $T$, and \emph{Best Arm Identification} (BAI), where the goal is to identify the best arm with high confidence using as few total arm pulls as possible.
+In cooperative multi-agent learning, no individual agent has access to the global state of the system, yet the best-performing strategy is usually the one available to a centralized decision maker with a full view of everyone's observations. This is the setting whenever $N$ agents connected by an undirected graph $G = (V, E)$ must repeatedly act and learn from feedback while exchanging only local messages with their graph neighbors. Existing approaches close the gap to centralized performance either by symmetric averaging, where every agent maintains its own estimate and no coordinator ever exists (e.g., Coop-UCB2 \citep{landgren2021distributed}), or by assuming a communication model rich enough that any agent can reach any other in one step (e.g., the all-to-all broadcast of Hillel et al.\ \citep{hillel2013distributed}). Both work, but neither asks whether a coordinator could arise from the graph itself, without being assumed into existence or requiring dense connectivity.
 
-The central difficulty in both settings is the tension between \emph{decentralization} (no agent has global knowledge) and \emph{statistical efficiency} (centralized coordination is optimal). Existing approaches resolve this either by symmetric averaging (e.g., Coop-UCB2 \citep{landgren2021distributed}) or by assuming all-to-all communication (e.g., Hillel et al.\ \citep{hillel2013distributed}). \merw{} takes a different route: a coordinator \emph{emerges} from the graph structure itself, without any agent knowing the global topology.
+\merw{} answers this question constructively: a coordinator \emph{emerges} from the graph structure, identified from purely local computation, with no agent ever seeing the global topology or knowing $N$ in advance. The key idea is that Maximal Entropy Random Walk (MERW) eigenvector centrality \citep{burda2009localization}, computed via a fully decentralized gossip protocol \citep{jelasity2007asynchronous}, identifies the structurally most central node in $G$. This node, the hub, organizes the rest of the network into a spanning routing tree via max-flooding, again using only local information. Once the tree is in place, the hub acts as a de-facto central coordinator: every agent routes its observations up toward the hub, which sees the globally aggregated picture and broadcasts its decisions back down. We prove that this emergent coordinator is statistically equivalent to a true centralized coordinator for any decision rule that depends only on globally aggregated per-agent statistics, at the cost of a bounded communication overhead determined by the tree's depth.
 
-The key insight is that Maximal Entropy Random Walk (MERW) eigenvector centrality \citep{burda2009localization}, computed via a fully decentralized gossip protocol \citep{jelasity2007asynchronous}, identifies the structurally most central node. This node, the hub, organizes the rest of the network into a spanning routing tree via max-flooding, again using only local information. Once the tree is in place, the hub acts as a de-facto central coordinator: every agent routes its observations up toward the hub, which sees the globally aggregated picture and makes decisions on behalf of the network.
+This last property is what makes \merw{} a \emph{protocol} rather than a single algorithm: any decentralized cooperative-learning task whose decision rule fits this mold can be run over the same emergent hub-and-tree structure by supplying two application-specific rules -- what each agent contributes locally, and what the hub decides from the aggregate. We instantiate both rules for two standard cooperative multi-armed bandit objectives, \emph{regret minimization} and \emph{best arm identification} (BAI), and show in both cases that the emergent coordinator recovers centralized-level performance.
 
-This design has a structural weakness: the hub is a single point of failure. We show that this weakness can be resolved with no overhead during normal operation, by designating the hub's most central direct child as a passive backup that already mirrors the hub's state through the ordinary downlink broadcast.
+The emergent-coordinator design has one structural weakness: the hub is a single point of failure, and more generally, any node's failure disrupts the part of the tree that routes through it. We show that hub failure -- the more consequential case, since it can stall the entire network -- can be tolerated with zero communication overhead during normal operation, by designating the hub's most central direct child as a passive backup that already mirrors the hub's state through the ordinary downlink broadcast. Non-hub failure, which only disrupts a subtree, is repaired even more cheaply, via precomputed swap edges.
 
-\paragraph{Contributions.} (1) A fully decentralized protocol for inducing centrality: the hub and tree emerge from local MERW computations, requiring no privileged node, no global communication, and no prior knowledge of $N$ or the graph structure. (2) A proof that this emergent coordinator is statistically sufficient for both regret minimization and BAI, matching centralized performance up to an $O(D)$ communication overhead per round, where $D$ is the depth of the induced tree. (3) \merwft, a passive-backup extension tolerating permanent hub failure at zero steady-state cost, with failover completing in $O(\mathrm{diam}(G))$ rounds.
+\paragraph{Contributions.} (1) A fully decentralized protocol for \emph{inducing} centrality: the hub and tree emerge from local MERW computations, requiring no privileged node, no global communication, and no prior knowledge of $N$ or the graph structure. (2) A proof that this emergent coordinator is statistically sufficient for any decision rule depending only on globally aggregated statistics, instantiated for regret minimization and best arm identification, both matching centralized performance up to an $O(D)$ communication overhead per round, where $D$ is the depth of the induced tree. (3) \merwft, a passive-backup extension tolerating permanent failure of any node -- hub or non-hub -- at zero or near-zero steady-state cost.
 
 \section{Related Work}
 \label{sec:related}
 
-\paragraph{Cooperative multi-agent bandits.} Coop-UCB2 \citep{landgren2021distributed} uses doubly stochastic consensus weights to diffuse observations across the graph; every agent plays an equivalent role and no coordinator is assumed. Mart\'inez-Rubio et al.\ \citep{martinez2019decentralized} introduce the total-pull clock we adopt to index UCB confidence intervals by actual observations rather than wall-clock rounds. Hillel et al.\ \citep{hillel2013distributed} study cooperative BAI under all-to-all broadcast; we build directly on their Algorithm 3, replacing the broadcast with hop-by-hop relay over the MERW tree.
+\paragraph{Cooperative multi-agent bandits.} Coop-UCB2 \citep{landgren2021distributed} uses doubly stochastic consensus weights to diffuse observations across the graph; every agent plays an equivalent role and no coordinator is assumed. Mart\'inez-Rubio et al.\ \citep{martinez2019decentralized} introduce the total-pull clock we adopt to index UCB confidence intervals by actual observations rather than wall-clock rounds. Hillel et al.\ \citep{hillel2013distributed} study cooperative BAI under all-to-all broadcast; we build directly on their Algorithm 3, replacing the broadcast with hop-by-hop relay over the MERW tree. In all three cases, the communication model is fixed in advance (symmetric gossip or all-to-all); \merw{} instead derives a communication structure -- the hub and tree -- from the graph itself, and shows it is sufficient for the same class of decision rules.
 
 \paragraph{Eigenvector centrality and decentralized computation.} The Maximal Entropy Random Walk \citep{burda2009localization} provides an information-theoretic grounding for eigenvector centrality: $\psi_i$ is the unique centrality consistent with assigning equal probability to all paths of equal length, and $\psi_i^2$ concentrates sharply on a small set of nodes in heterogeneous graphs. Jelasity et al.\ \citep{jelasity2007asynchronous} give a gossip-based normalization for distributed power iteration that avoids a global all-reduce, which we use directly to compute $\psi$ without any agent ever knowing $N$.
 
-\paragraph{Fault tolerance in tree-structured coordination.} The passive-backup pattern underlying \merwft{} is standard in distributed systems: OSPF's Backup Designated Router \citep{rfc2328} and RSTP's Alternate Port \citep{ieee8021w} both pre-identify a successor that promotes itself locally upon primary failure. Lamport, Malkhi and Zhou \citep{lamport2009vertical} formalize passive replication as a special case of Paxos, establishing that a mirroring backup is at most one synchronization round stale; \merwft{} applies this pattern to the aggregation-tree setting.
+\paragraph{Fault tolerance in tree-structured coordination.} The passive-backup pattern underlying \merwft{} is standard in distributed systems: OSPF's Backup Designated Router \citep{rfc2328} and RSTP's Alternate Port \citep{ieee8021w} both pre-identify a successor that promotes itself locally upon primary failure. Lamport, Malkhi and Zhou \citep{lamport2009vertical} formalize passive replication as a special case of Paxos, establishing that a mirroring backup is at most one synchronization round stale; \merwft{} applies this pattern to the aggregation-tree setting, and additionally handles non-hub failure via the swap-edge framework of Nardelli et al.\ \citep{nardelli2003}.
 
-\section{EigenTree: Hub Emergence and Routing}
+\section{EigenTree: The Protocol}
 \label{sec:merw}
 
-Let $A \in \{0,1\}^{N \times N}$ be the adjacency matrix of $G$. By Perron--Frobenius, $A$ has a unique positive leading eigenvalue $\lambda_1$ with strictly positive eigenvector $\psi$, $\|\psi\|_2 = 1$. The MERW stationary distribution is $\pi_i = \psi_i^2$, which, unlike the degree-proportional stationary distribution of the standard random walk, concentrates sharply on structurally central nodes \citep{burda2009localization}. We use $\psi_i$ as node $i$'s centrality score.
+\subsection{Hub Emergence and Routing}
+
+The Maximal Entropy Random Walk (MERW) is the walk on $G$ whose transition probabilities make every path of a given length between two fixed nodes equally likely \citep{burda2009localization}, unlike the standard random walk, which only weighs each single step by degree and has no notion of the paths it is part of. Because MERW weighs entire paths equally, a node's stationary probability under MERW reflects how many long paths of all lengths run through it, not just how many neighbors it has. On a graph with irregular structure, a small number of nodes sit on disproportionately many such paths, and MERW's stationary distribution concentrates almost all of its mass on exactly that handful of nodes, with every other node close to zero \citep{burda2009localization}. This sharp concentration, not just high degree, is what identifies a natural hub: a node that is central across paths of every length, agreed upon by any agent that computes the same quantity.
+
+Formally, let $A \in \{0,1\}^{N \times N}$ be the adjacency matrix of $G$. By Perron--Frobenius, $A$ has a unique positive leading eigenvalue $\lambda_1$ with strictly positive eigenvector $\psi$, $\|\psi\|_2 = 1$; MERW's stationary distribution is $\pi_i = \psi_i^2$. We use $\psi_i$ as node $i$'s centrality score.
 
 No single agent has access to $A$. We compute $\psi$ via the distributed power iteration of \citep{jelasity2007asynchronous}: each agent normalizes using only local gossip with pairwise averaging of log-growth rates, never requiring knowledge of $N$ or the global topology. Since only the \emph{ratio} $\psi_j/\psi_i$ is needed for routing, the unnormalized iterates suffice.
 
-After power iteration, each agent $i$ holds $\tilde\psi_i \approx c\cdot\psi_i$ for common unknown scale $c>0$. A short \emph{max-flooding} phase then propagates the global maximum: each agent relays the largest $\tilde\psi$ value seen, and every local maximum re-routes toward the incoming direction. The result is a single directed spanning tree $\mathcal{T}$ rooted at $h^\star = \arg\max_i \tilde\psi_i$, converging in at most $\mathrm{diam}(G)$ rounds.
+After power iteration, each agent $i$ holds $\tilde\psi_i \approx c\cdot\psi_i$ for common unknown scale $c>0$. A short \emph{max-flooding} phase then propagates the global maximum: each agent relays the largest $\tilde\psi$ value seen, and every local maximum re-routes toward the incoming direction. The result is a single directed spanning tree $\mathcal{T}$ rooted at $h^\star = \arg\max_i \tilde\psi_i$, converging in at most $\mathrm{diam}(G)$ rounds. Immediately afterward, each node $i$ knows only its own parent $\mathrm{par}(i)$; its children, its depth $d_i$, and the tree height $D$ are all discovered incrementally during the protocol's first cycle below, not known in advance.
 
 \begin{proposition}[Centralized aggregation and broadcast via routing]
 \label{prop:aggbcast}
-If each node $i$ holds a scalar $x_i$ and propagates it toward $h^\star$ one hop per round (each intermediate node forwarding the sum received), the hub holds $\sum_i x_i$ after $D$ rounds, where $D$ is the tree height. Symmetrically, a value broadcast from $h^\star$ one hop per round reaches every node after $D$ rounds.
+If each node $i$ holds a scalar $x_i$ and propagates it toward $h^\star$ one hop per round (each intermediate node forwarding the sum received), the hub holds $\sum_i x_i$ after $D$ rounds, where $D$ is the tree height. Symmetrically, a value broadcast from $h^\star$ one hop per round reaches every node after $D$ rounds. Neither direction requires any node to know $D$ in advance: the uplink terminates when the hub observes a round with no incoming packets, and each node infers its own depth $d_i$ from the hop count carried on the first downlink it receives.
 \end{proposition}
 
 \begin{proof}[Proof sketch]
-Both directions follow by induction on tree depth: leaves/depth-1 nodes complete their part after round 1, and each subsequent round extends coverage by exactly one depth level.
+Both directions follow by induction on tree depth: leaves complete their part of the uplink after round 1 (having no children to wait on), and each subsequent round extends coverage by exactly one depth level in either direction; the hub's silence after round $D$ and each node's hop count are purely local observations of this process.
 \end{proof}
+
+\subsection{Coordinator Sufficiency}
 
 \begin{theorem}[Coordinator sufficiency]
 \label{thm:coordinator}
-Let $\mathcal{A}$ be any bandit algorithm whose decision depends only on global sufficient statistics $\{(\hat n^k,\hat s^k)\}_{k=1}^K$ and total pull count $P$. If a coordinator receives exact global statistics within $D$ rounds and broadcasts its decision within $D$ rounds, with all agents synchronized via a depth signal, then the coordinator's information state at every decision point is identical to that of a centralized instance of $\mathcal{A}$, with an additive overhead of at most $2D$ time steps per decision round.
+Let $\mathcal{A}$ be any decision rule whose output at each step depends only on globally aggregated per-agent statistics $B = \sum_{i \in V} b_i$, where $b_i$ is agent $i$'s local contribution. If a coordinator receives the exact aggregate $B$ within $D$ rounds and broadcasts its decision within $D$ further rounds, with all agents synchronized via the depth signal carried on the broadcast, then the coordinator's information state at every decision point is identical to that of a centralized instance of $\mathcal{A}$, with an additive overhead of at most $2D$ time steps per decision round.
 \end{theorem}
 
 \begin{proof}[Proof sketch]
-By Proposition~\ref{prop:aggbcast}, the hub's aggregated statistics after $D$ uplink steps are exact, and the hub's decision reaches every agent after $D$ further downlink steps; the depth signal ensures all agents restart together.
+By Proposition~\ref{prop:aggbcast}, the hub's aggregate $B$ after $D$ uplink rounds is exact, and the hub's decision reaches every agent after $D$ further downlink rounds; the depth signal ensures all agents restart together, so the sequence of decisions $\mathcal{A}$ produces is identical to a centralized run on the same pulled observations.
 \end{proof}
 
-Figure~\ref{fig:merw_viz_ba} illustrates the induced hub and routing tree on a representative graph.
+\merw{} is therefore a generic protocol, given as Algorithm~\ref{alg:merw-generic}: Initialization, then repeated cycles of Pull, Uplink, Hub decision, Downlink, parameterized by three application-specific hooks, $\textsc{Init}$, $\textsc{LocalPull}$, and $\textsc{HubDecide}$, that determine what each agent contributes locally and what the hub decides from the aggregate $B$. Any decentralized cooperative-learning task whose decision rule fits Theorem~\ref{thm:coordinator} can be run over the same emergent tree by supplying a different set of hooks. Table~\ref{tab:instantiations} instantiates them for regret minimization and best arm identification, detailed in the two subsections below.
+
+\begin{algorithm}[tb]
+\caption{\merw{} (generic protocol)}
+\label{alg:merw-generic}
+\begin{algorithmic}[1]
+\STATE \textbf{Require:} graph $G$; hooks $\textsc{Init}$, $\textsc{LocalPull}$, $\textsc{HubDecide}$; a stopping condition on $t$ or on a hub-computed flag $\mathrm{done}$
+\STATE Compute $\tilde\psi$ via distributed power iteration; run max-flooding to obtain tree $\mathcal{T}$ rooted at $h^\star$
+\STATE $t \leftarrow 0$; $\mathrm{done} \leftarrow \textbf{false}$; each node $i$ knows only $\mathrm{par}(i)$ so far
+\FORALL{$i \in V$}
+    \STATE $\sigma_i \leftarrow \textsc{Init}()$; $t \mathrel{+}= (\text{rounds used})$
+\ENDFOR
+\REPEAT
+    \FORALL{$i \in V$}
+        \STATE $(b_i, \sigma_i) \leftarrow \textsc{LocalPull}(\sigma_i)$; $t \mathrel{+}= (\text{rounds used})$
+    \ENDFOR
+    \STATE \emph{Uplink}: every node forwards $b_i$ toward $h^\star$ once it has heard from all its children; the hub absorbs packets until a round passes with none arriving, yielding $B = \sum_i b_i$ (Prop.~\ref{prop:aggbcast}); no node needs $D$ in advance
+    \STATE $(m, \mathrm{done}) \leftarrow \textsc{HubDecide}(B)$; $t \mathrel{+}= 1$
+    \STATE \emph{Downlink}: hub sends $(m, D, \mathrm{done}, \mathrm{hops}{=}0)$ to $\mathrm{ch}(h^\star)$; each node that receives $(m, D, \mathrm{done}, \mathrm{hops})$ sets its own depth $d_i \leftarrow \mathrm{hops}+1$, updates $\sigma_i$ from $m$, and forwards $\mathrm{hops}{+}1$ to its children; this is how every node first learns $D$ and $d_i$
+\UNTIL{$\mathrm{done}$ \textbf{or} $t \geq T$}
+\end{algorithmic}
+\end{algorithm}
+
+\begin{table}[tb]
+\centering
+\caption{Instantiating Algorithm~\ref{alg:merw-generic}.}
+\label{tab:instantiations}
+\small
+\begin{tabular}{p{0.15\columnwidth}p{0.35\columnwidth}p{0.35\columnwidth}}
+\toprule
+ & \merw-UCB & \merw-BAI \\
+\midrule
+$\textsc{Init}$ & pull each $k\in\{1,..,K\}$ once, $K$ rounds & $\sigma_i \leftarrow S_0$, 0 rounds \\
+$\textsc{Local}$- $\textsc{Pull}$ & UCB-maximizing arm, 1 round & every $k\in S_{r-1}$, $L_r$ times \\
+$\textsc{Hub}$- $\textsc{Decide}$ & UCB-pull on $B$; never stops early & eliminate below $\epsilon_r$; stop when $|S_r|{=}1$ \\
+Downlink $m$ & aggregate $(\hat n,\hat s,P)$ & surviving set $S_r$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.95\columnwidth]{results/MERW_visualization/merw_tree_ba_N20.pdf}
-    \caption{MERW centrality and routing tree on a Barab\'{a}si--Albert graph ($N=20$). \emph{Left}: undirected graph, nodes colored by $\psi_i^2$. \emph{Center}: routing subtree overlaid on the graph, hub ringed in gold. \emph{Right}: induced directed tree, hierarchical layout, arrows child $\to$ parent.}
+    \caption{MERW centrality and routing tree on a Barab\'{a}si--Albert graph ($N=20$). \emph{Left}: undirected graph, nodes colored by $\psi_i/\psi_{\max}$. \emph{Center}: routing subtree overlaid on the graph, hub ringed in gold. \emph{Right}: induced directed tree, hierarchical layout, arrows child $\to$ parent.}
     \label{fig:merw_viz_ba}
 \end{figure}
 
-\section{Regret Minimization}
+\subsection{Instantiation: Regret Minimization}
 \label{sec:regret}
 
-With $K$ arms of unknown means $\mu_1 \geq \cdots \geq \mu_K$ and sub-Gaussian rewards, the objective is to minimize $R(T) = \sum_{i}\sum_{t=1}^T \mathbb{E}[\mu_1 - \mu_{a_i(t)}]$. Each relay cycle lasts $2D+1$ rounds: all agents pull simultaneously, the hub aggregates via the uplink and runs UCB on the global statistics, and broadcasts its estimates back down. The total-pull count $P$ (following \citep{martinez2019decentralized}) is maintained exactly by the hub and broadcast so all nodes share a consistent UCB bonus.
+With $K$ arms of unknown means $\mu_1 \geq \cdots \geq \mu_K$ and sub-Gaussian rewards, the objective is to minimize $R(T) = \sum_{i}\sum_{t=1}^T \mathbb{E}[\mu_1 - \mu_{a_i(t)}]$. Each agent's local contribution $b_i$ is its new per-arm pull counts and reward sums since the last cycle; the hub's decision rule pulls the UCB-maximizing arm on the aggregate and broadcasts the running total $(\hat n, \hat s, P)$, where the total-pull count $P$ (following \citep{martinez2019decentralized}) lets every node use a consistent UCB bonus. Each relay cycle lasts $2D+1$ rounds: one pull round, $D$ uplink rounds, one hub-decision round, $D$ downlink rounds.
 
 \begin{corollary}[Regret matches centralized UCB]
 \label{cor:regret}
 Under the \merw{} relay protocol, the leading term of the expected group cumulative regret matches a centralized UCB agent on $P$ total pulls, with $P = \Theta(NT/(2D+1))$.
 \end{corollary}
 
-We evaluate \merw{} on Barab\'{a}si--Albert graphs ($N=20$, $K=5$, $T=5000$, 50 runs; Figure~\ref{fig:regret_ba}). The hub, identified without any central authority, coordinates the network to logarithmic group regret while non-hub agents accumulate no regret during communication rounds.
+\subsection{Instantiation: Best Arm Identification}
+\label{sec:bai}
+
+In BAI, given confidence $\delta$, the goal is to identify $a^\star = \arg\max_k \mu_k$ with probability $\geq 1-\delta$ using as few total pulls as possible. \merw-BAI adapts Hillel's Algorithm 3 \citep{hillel2013distributed} to the same generic protocol: each agent's local contribution $b_i$ is its per-arm sums over the current surviving arm set $S_{r-1}$, pulled $L_r = \lceil t_r - t_{r-1} \rceil$ times each round, where $t_r = \frac{2}{N\epsilon_r^2}\ln\frac{4Kr^2}{\delta}$ is Hillel's schedule and $\epsilon_r = 2^{-r}$. Every node computes $L_r$ independently from this formula, so no per-round negotiation is needed, but $N$ appears in the formula itself, so every node must know $N$ in advance: if two nodes used different values of $N$ they would compute different $L_r$ and desynchronize. This is unlike \merw-UCB, whose UCB bonus depends only on the total-pull count $P$ as it is actually observed through the downlink, never on $N$ directly. In principle $N$ could be learned the same way the tree height $D$ is, by having the hub count distinct senders on an uplink and broadcast the result down; but $D$ is discovered as a free byproduct of the first ordinary cycle, whereas the very first $L_1$ is needed \emph{before} any uplink has happened, so learning $N$ this way would require a dedicated bootstrap cycle up front. We treat $N$ as known in advance and leave decentralized bootstrap for future work. The hub's decision rule computes global averages from the aggregate, eliminates arms falling below the current threshold $\epsilon_r$, and broadcasts the surviving set $S_r$ instead of a running statistic. The hub, not any other node, determines when to stop -- once $|S_r|=1$ -- and this outcome is broadcast on the downlink like any other decision. Consequently \merw-BAI's round length $L_r + 2D$ shrinks across elimination rounds as $\epsilon_r$ tightens, unlike \merw-UCB's fixed $2D+1$.
+
+\begin{corollary}[BAI sample complexity matches Hillel]
+\label{cor:bai}
+The total number of arm pulls required by \merw-BAI to identify $a^\star$ with probability $\geq 1-\delta$ is identical to Hillel's algorithm; the only overhead is $2D$ extra time steps per elimination round.
+\end{corollary}
+
+\section{Fault Tolerance}
+\label{sec:ft}
+
+Every node in $\mathcal{T}$ is a potential failure point, and \merwft{} must account for the failure of \emph{any} node, not only the hub. The consequences are highly asymmetric, however. The hub alone runs the decision rule on globally aggregated statistics; if it fails permanently, no downlink is broadcast, no agent learns the outcome of the current round, and the entire coordination structure collapses. A non-hub node, by contrast, is a relay for one subtree: its failure disrupts only the agents below it, while the hub and the rest of the tree continue operating normally. We treat the two cases in turn, hub failure first as the more consequential one.
+
+\subsection{Hub Failure}
+
+\merwft{} tolerates permanent hub failure with zero communication overhead during normal operation. The key idea is that the hub's direct children already receive every downlink broadcast, so they hold an exact copy of the hub's global state for free; we designate the child with the highest eigenvector centrality as backup $b^\star = \arg\max_{j \in \mathrm{ch}(h^\star)} \tilde\psi_j$, announced once in the first downlink after the hub learns its children.
+
+\begin{proposition}[Backup staleness]
+At the end of any cycle, $b^\star$'s stored state equals the hub's state after the hub's own pull that cycle. If the hub fails during the next cycle, the backup's state is at most one full cycle stale.
+\end{proposition}
+
+Upon detecting hub silence via timeout, $b^\star$ (1) self-promotes, assuming the root role using its stored state; (2) floods a promotion message over graph edges (not tree edges, since $b^\star$ shares no tree edge with its former siblings) to notify them, so they re-route through $b^\star$; (3) recomputes and broadcasts the new tree height $D'$; and (4) resumes the protocol immediately. This requires the graph to be 2-connected, so that former siblings retain a path to $b^\star$ after the hub is removed.
+
+\begin{proposition}[Failover correctness and completeness]
+After promotion, the network forms a valid spanning tree rooted at $b^\star$ with height $D' \leq D+1$ and no cycles. The procedure completes in $O(\mathrm{diam}(G))$ rounds in general, and $O(1)$ rounds when $b^\star$ is directly connected to all former siblings.
+\end{proposition}
+
+A subtlety arises during the (possibly multi-round) re-routing step: siblings that are themselves internal nodes have not yet forwarded a downlink to their own subtrees, which could otherwise cause a cascade of spurious non-hub failovers as descendants time out waiting for a parent that is mid-reroute. We resolve this with a lightweight \textsc{Hold} signal, piggybacked on the existing downlink mechanism, that a re-routing sibling forwards immediately to its subtree to suspend timeouts until re-routing completes. The backup-selection and promotion procedures apply recursively, so \merwft{} tolerates any finite sequence of hub failures: each promoted hub re-runs the same selection procedure to name its own successor.
+
+\subsection{Non-Hub Failure}
+
+When a non-hub node $v$ at depth $d_v$ fails, the impact is local: only the subtree rooted at $v$ is disrupted. Failure is detected by $v$'s parent, the fastest possible locus of detection (children would take $D-d_v$ hops to notice, and the hub a full cycle). Rather than scanning neighbors at failure time, each node precomputes a \emph{swap parent} once depths are established after the first cycle, following the best-swap-edge framework of Nardelli et al.\ \citep{nardelli2003}, minimizing the maximum depth increase across its subtree. Re-attachment then takes exactly one round.
+
+\begin{proposition}[Non-hub failover correctness]
+After re-attachment of all orphaned children of a failed node $v$, the remaining live nodes form a valid spanning tree with height $D' \leq D + |\mathrm{ch}(v)|$ and no cycles.
+\end{proposition}
+
+\section{Experiments}
+\label{sec:experiments}
+
+We evaluate both instantiations on two graph families: Barab\'{a}si--Albert (BA), where the MERW hub concentrates on the highest-degree node (Figure~\ref{fig:merw_viz_ba}), and Erd\H{o}s--R\'{e}nyi (ER), where centrality is more spread but still identifies a clear hub.
+
+For regret minimization ($N=20$, $K=5$, $T=5000$, 50 runs; Figure~\ref{fig:regret_ba}), the hub, identified without any central authority, coordinates the network to logarithmic group regret while non-hub agents accumulate no regret during communication rounds, on both graph families.
 
 \begin{figure}[tb]
     \centering
@@ -121,17 +213,14 @@ We evaluate \merw{} on Barab\'{a}si--Albert graphs ($N=20$, $K=5$, $T=5000$, 50 
     \label{fig:regret_ba}
 \end{figure}
 
-\section{Best Arm Identification}
-\label{sec:bai}
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.95\columnwidth]{results/Regret/relay_regret_er_N20_K5_T5000.pdf}
+    \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $K=5$, $T=5000$, 50 runs). Panel layout as in Figure~\ref{fig:regret_ba}.}
+    \label{fig:regret_er}
+\end{figure}
 
-In BAI, given confidence $\delta$, the goal is to identify $a^\star = \arg\max_k \mu_k$ with probability $\geq 1-\delta$ using as few total pulls as possible. \merw-BAI adapts Hillel's Algorithm 3 \citep{hillel2013distributed} to the MERW tree: each elimination round has a pull phase, an uplink of local sums, a hub elimination step, and a downlink of the surviving set and a timing signal. The pull schedule and elimination rule are identical to Hillel's; only the communication model differs (hop-by-hop relay instead of all-to-all broadcast), costing $O(D)$ time steps per round instead of $O(1)$.
-
-\begin{corollary}[BAI sample complexity matches Hillel]
-\label{cor:bai}
-The total number of arm pulls required by \merw-BAI to identify $a^\star$ with probability $\geq 1-\delta$ is identical to Hillel's algorithm; the only overhead is $2D$ extra time steps per elimination round.
-\end{corollary}
-
-Figure~\ref{fig:bai} compares total arm pulls as a function of $N$, using the same graph and MERW-identified hub for both algorithms.
+For best arm identification ($K=10$, $\delta=0.05$, 50 runs per $N$), Figures~\ref{fig:bai} and \ref{fig:bai_er} compare total arm pulls against Hillel's centralized algorithm as a function of $N$, using the same graph and MERW-identified hub for both, on BA and ER graphs respectively.
 
 \begin{figure}[tb]
     \centering
@@ -140,31 +229,37 @@ Figure~\ref{fig:bai} compares total arm pulls as a function of $N$, using the sa
     \label{fig:bai}
 \end{figure}
 
-\section{Fault-Tolerant Hub Failover}
-\label{sec:ft}
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.95\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
+    \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, 50 runs per $N$). Panel layout as in Figure~\ref{fig:bai}.}
+    \label{fig:bai_er}
+\end{figure}
 
-The hub is a single point of failure: if it crashes, no downlink is broadcast and all non-hub agents wait indefinitely. Restarting the full \merw{} pipeline mid-episode is infeasible, since it requires a fresh power-iteration and max-flooding phase with no accumulated statistics. \merwft{} resolves this at zero steady-state cost.
+\FloatBarrier
 
-\paragraph{Passive backup.} The hub's direct children already receive every downlink broadcast, so they hold an exact copy of the hub's global state $(\hat n, \hat s, P)$ at the end of every cycle for free. We designate the child with the highest eigenvector centrality as backup $b^\star = \arg\max_{j \in \mathrm{ch}(h^\star)} \tilde\psi_j$, announced once in the first downlink after the hub learns its children.
+To validate the failover mechanism of Section~\ref{sec:ft} directly, we run \merwft{} on an ER graph ($N=20$, $p=0.5$, $K=10$, $T=5000$) and kill the hub at $t=2000,3000,4000$, letting the backup promote itself and the network recover each time. Figure~\ref{fig:ft_regret} shows the resulting group regret: every failure is followed by a recovery within a handful of rounds, and the post-recovery trajectory rejoins the same growth rate as before the failure, with no lasting penalty. Figure~\ref{fig:ft_trees} shows the induced routing tree on the underlying graph immediately after each failure, confirming that the backup correctly re-roots the tree and reintegrates every former sibling of the failed hub.
 
-\begin{proposition}[Backup staleness]
-At the end of any cycle, $b^\star$'s stored state equals the hub's state after the hub's own pull that cycle. If the hub fails during the next cycle, the backup's state is at most one full cycle stale.
-\end{proposition}
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T5000_every1000.pdf}
+    \caption{Group regret for \merwft{} on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=5000$) with the hub killed at $t=2000,3000,4000$. Dashed lines mark failures, dotted lines mark recovery. All three failures are recovered from.}
+    \label{fig:ft_regret}
+\end{figure}
 
-\paragraph{Failover.} Upon detecting hub silence via timeout, $b^\star$ (1) self-promotes, assuming the root role using its stored state; (2) floods a promotion message over graph edges (not tree edges) to notify its former siblings, who re-route through $b^\star$; (3) recomputes and broadcasts the new tree height $D'$; and (4) resumes the protocol immediately. This requires the graph to be 2-connected, so that former siblings retain a path to $b^\star$ after the hub is removed.
-
-\begin{proposition}[Failover correctness and completeness]
-After promotion, the network forms a valid spanning tree rooted at $b^\star$ with height $D' \leq D+1$ and no cycles. The procedure completes in $O(\mathrm{diam}(G))$ rounds in general, and $O(1)$ rounds when $b^\star$ is directly connected to all former siblings.
-\end{proposition}
-
-A subtlety arises during the (possibly multi-round) re-routing step: siblings that are themselves internal nodes have not yet forwarded a downlink to their own subtrees, which could otherwise cause a cascade of spurious non-hub failovers as descendants time out waiting for a parent that is mid-reroute. We resolve this with a lightweight \textsc{Hold} signal, piggybacked on the existing downlink mechanism, that a re-routing sibling forwards immediately to its subtree to suspend timeouts until re-routing completes. The backup-selection and promotion procedures apply recursively, so \merwft{} tolerates any finite sequence of hub failures, and non-hub node failures are handled separately via precomputed swap edges with $O(1)$-round re-attachment.
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_trees_er_N20_K10_T5000_every1000.pdf}
+    \caption{Underlying graph and induced routing tree: initial, and immediately after each of the three hub failures. Faded edges are non-tree graph edges; arrows point from child to parent; dead nodes are shown in gray.}
+    \label{fig:ft_trees}
+\end{figure}
 
 \section{Discussion and Conclusion}
 \label{sec:discussion}
 
-\merw{} shows that a coordinator can emerge from purely local, decentralized computation, and that this emergent coordinator is statistically sufficient for both regret minimization and best arm identification, matching centralized performance up to a bounded communication overhead. \merwft{} shows that the resulting single point of failure can be removed at zero steady-state cost via passive backup replication, with bounded-round failover.
+\merw{} shows that a coordinator can emerge from purely local, decentralized computation, and that this emergent coordinator is statistically sufficient for any decision rule depending only on globally aggregated statistics -- demonstrated here for regret minimization and best arm identification, both matching centralized performance up to a bounded communication overhead. \merwft{} shows that the resulting failure points, hub and non-hub alike, can be removed at zero or near-zero steady-state cost.
 
-The main limitations are: the protocol assumes a connected, undirected graph, static except for the fail-stop failures handled by \merwft{}; the communication overhead $D$ can be large on sparse or path-like graphs; the BAI variant requires agents to know $N$ while the regret variant does not; and \merwft{} assumes 2-connectivity and fail-stop (not Byzantine) failures, with no mechanism for simultaneous hub-and-backup failure. We view emergent, MERW-based coordination as a general tool applicable beyond the two settings studied here, and leave a tight regret bound (Corollary~\ref{cor:regret} states only the leading-order behavior) and the interaction between backup staleness and regret for future work.
+The main limitations are: the protocol assumes a connected, undirected graph, static except for the node failures handled by \merwft{}; the communication overhead $D$ can be large on sparse or path-like graphs; and the BAI variant requires agents to know $N$ while the regret variant does not. \merwft{} handles fail-stop failures: a node either works correctly or goes permanently silent, detected by timeout. It does not handle Byzantine failures, where a node stays active but sends incorrect or conflicting messages, and has no mechanism for simultaneous hub-and-backup failure. This is a deliberate scope choice, not an oversight: the motivation for \merw{} is that a single centralized coordinator is a single point of failure under ordinary crashes, the same failure mode that motivates decentralization in the first place, and \merwft{} closes exactly that gap. Tolerating adversarial nodes is a different, harder problem with its own established toolkit, and combining it with \merw{}'s emergent coordination is left for future work. We view emergent, MERW-based coordination as a general tool applicable well beyond the two instantiations studied here, and leave a tight regret bound (Corollary~\ref{cor:regret} states only the leading-order behavior) and the interaction between backup staleness and regret for future work.
 
 \bibliography{references}
 

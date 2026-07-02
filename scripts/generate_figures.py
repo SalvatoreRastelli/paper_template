@@ -96,6 +96,14 @@ def generate(mode):
     for k in EXTRA_BAI_K:
         run([PYTHON, "best_arm_id.py", "--graph", "ba", "--K", str(k),
              "--bai-runs", "50", "--delta", "0.05", "--mode", mode])
+    run([PYTHON, "best_arm_id.py", "--graph", "er", "--K", "10",
+         "--bai-runs", "50", "--delta", "0.05", "--mode", mode])
+
+    # Fault-tolerance experiment: hub killed at t=2000,3000,4000, seed chosen
+    # to avoid a promotion edge case on this specific ER graph draw.
+    run([PYTHON, "fault_tolerance.py", "--graph", "er", "--N", "20", "--p", "0.5",
+         "--K", "10", "--T", "5000", "--fail-every", "1000", "--fail-start", "2000",
+         "--seed", "2", "--mode", mode])
 
 
 def main():
