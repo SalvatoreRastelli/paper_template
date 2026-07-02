@@ -72,8 +72,9 @@ def make_ba_graph(N, m=2, seed=None):
     raise RuntimeError("Cannot make connected BA graph.")
 
 
-def make_er_graph(N, seed=None):
-    p = 2.5 * np.log(N) / N
+def make_er_graph(N, seed=None, p=None):
+    if p is None:
+        p = 2.5 * np.log(N) / N
     rng = np.random.RandomState(seed)
     for _ in range(100):
         G = nx.erdos_renyi_graph(N, p, seed=int(rng.randint(0, 2**31)))
@@ -476,16 +477,21 @@ def _graph_layout(G, graph_type, seed, clusters=None):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def _meta_csv_path(graph_type, N):
-    return DATA_DIR / f"merw_tree_{graph_type}_N{N}_meta.csv"
+def _tag(graph_type, N, p=None):
+    suffix = f"_p{p}" if p is not None else ""
+    return f"{graph_type}_N{N}{suffix}"
 
 
-def _nodes_csv_path(graph_type, N):
-    return DATA_DIR / f"merw_tree_{graph_type}_N{N}_nodes.csv"
+def _meta_csv_path(graph_type, N, p=None):
+    return DATA_DIR / f"merw_tree_{_tag(graph_type, N, p)}_meta.csv"
 
 
-def _edges_csv_path(graph_type, N):
-    return DATA_DIR / f"merw_tree_{graph_type}_N{N}_edges.csv"
+def _nodes_csv_path(graph_type, N, p=None):
+    return DATA_DIR / f"merw_tree_{_tag(graph_type, N, p)}_nodes.csv"
+
+
+def _edges_csv_path(graph_type, N, p=None):
+    return DATA_DIR / f"merw_tree_{_tag(graph_type, N, p)}_edges.csv"
 
 
 def compute_merw_data(G, graph_type, seed, clusters=None):
@@ -530,16 +536,16 @@ def compute_merw_data(G, graph_type, seed, clusters=None):
     }
 
 
-def save_merw_csv(data, G):
+def save_merw_csv(data, G, p=None):
     graph_type, N = data["graph_type"], data["N"]
 
-    with open(_meta_csv_path(graph_type, N), "w", newline="") as f:
+    with open(_meta_csv_path(graph_type, N, p), "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["graph_type", "N", "seed", "hub", "lam", "tree_depth"])
         writer.writerow([graph_type, N, data["seed"], data["hub"],
                           data["lam"], data["tree_depth"]])
 
-    with open(_nodes_csv_path(graph_type, N), "w", newline="") as f:
+    with open(_nodes_csv_path(graph_type, N, p), "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["node", "psi", "pi", "parent", "depth", "subtree_hub",
                           "degree", "pos_x", "pos_y", "pos_tree_x", "pos_tree_y"])
@@ -550,7 +556,7 @@ def save_merw_csv(data, G):
                               data["depth"][i], data["subtree_of"][i],
                               data["degree"][i], px, py, ptx, pty])
 
-    with open(_edges_csv_path(graph_type, N), "w", newline="") as f:
+    with open(_edges_csv_path(graph_type, N, p), "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["src", "dst", "is_tree_edge"])
         tree_edge_set = {tuple(e) for e in data["tree_edges"]}
@@ -558,19 +564,19 @@ def save_merw_csv(data, G):
             is_tree = (u, v) in tree_edge_set or (v, u) in tree_edge_set
             writer.writerow([u, v, int(is_tree)])
 
-    print(f"  Saved {_meta_csv_path(graph_type, N)}, "
-          f"{_nodes_csv_path(graph_type, N)}, {_edges_csv_path(graph_type, N)}")
+    print(f"  Saved {_meta_csv_path(graph_type, N, p)}, "
+          f"{_nodes_csv_path(graph_type, N, p)}, {_edges_csv_path(graph_type, N, p)}")
 
 
-def load_merw_data(graph_type, N):
-    with open(_meta_csv_path(graph_type, N), newline="") as f:
+def load_merw_data(graph_type, N, p=None):
+    with open(_meta_csv_path(graph_type, N, p), newline="") as f:
         meta = next(csv.DictReader(f))
     seed = int(meta["seed"])
     hub = int(meta["hub"])
     lam = float(meta["lam"])
     tree_depth = int(meta["tree_depth"])
 
-    with open(_nodes_csv_path(graph_type, N), newline="") as f:
+    with open(_nodes_csv_path(graph_type, N, p), newline="") as f:
         rows = sorted(csv.DictReader(f), key=lambda r: int(r["node"]))
 
     psi   = np.array([float(r["psi"]) for r in rows])
@@ -588,7 +594,7 @@ def load_merw_data(graph_type, N):
             children[parent[i]].append(i)
     hubs = [i for i in range(N) if parent[i] < 0]
 
-    with open(_edges_csv_path(graph_type, N), newline="") as f:
+    with open(_edges_csv_path(graph_type, N, p), newline="") as f:
         edge_rows = list(csv.DictReader(f))
     G = nx.Graph()
     G.add_nodes_from(range(N))
@@ -607,7 +613,7 @@ def load_merw_data(graph_type, N):
     }, G
 
 
-def plot_merw(data, G):
+def plot_merw(data, G, p=None):
     N, graph_type = data["N"], data["graph_type"]
     pi, lam, hub, hubs = data["pi"], data["lam"], data["hub"], data["hubs"]
     parent, children = data["parent"], data["children"]
@@ -707,7 +713,7 @@ def plot_merw(data, G):
         f"$N={N}$  $\\cdot$  $\\lambda_1={lam:.4f}$",
         fontsize=13, y=1.02)
 
-    out = MERW_VIZ_DIR / f"merw_tree_{graph_type}_N{N}.pdf"
+    out = MERW_VIZ_DIR / f"merw_tree_{_tag(graph_type, N, p)}.pdf"
     fig.savefig(out, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"Saved {out}")
@@ -731,6 +737,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--graph", choices=("ba", "er", "barbell", "clustered", "grid", "cycle", "lollipop", "chain", "star"), default="ba")
     p.add_argument("--N",     type=int,   default=20)
+    p.add_argument("--p-er",  type=float, default=None,
+                   help="ER edge probability override (default: 2.5*ln(N)/N; ignored for other graphs)")
     p.add_argument("--seed",  type=int,   default=0)
     p.add_argument("--mode", choices=("compute", "plot", "all"), default="all",
                    help="compute: run MERW + layout and save data/*.csv only; "
@@ -739,15 +747,15 @@ def main():
     args = p.parse_args()
 
     if args.mode == "plot":
-        data, G = load_merw_data(args.graph, args.N)
-        plot_merw(data, G)
+        data, G = load_merw_data(args.graph, args.N, p=args.p_er)
+        plot_merw(data, G, p=args.p_er)
         return
 
     clusters = None
     if args.graph == "ba":
         G = make_ba_graph(args.N, m=2, seed=args.seed)
     elif args.graph == "er":
-        G = make_er_graph(args.N, seed=args.seed)
+        G = make_er_graph(args.N, seed=args.seed, p=args.p_er)
     elif args.graph == "barbell":
         G = make_barbell_graph(args.N, seed=args.seed)
     elif args.graph == "grid":
@@ -764,10 +772,10 @@ def main():
         G, clusters = make_clustered_graph(args.N, seed=args.seed)
 
     data = compute_merw_data(G, args.graph, args.seed, clusters=clusters)
-    save_merw_csv(data, G)
+    save_merw_csv(data, G, p=args.p_er)
     if args.mode == "compute":
         return
-    plot_merw(data, G)
+    plot_merw(data, G, p=args.p_er)
 
 
 if __name__ == "__main__":

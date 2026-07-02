@@ -519,17 +519,18 @@ def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
 # Data save / load / plot
 # ============================================================
 
-def _csv_path(graph_type, N, K, T, fail_every):
-    return DATA_DIR / f"fault_tolerance_{graph_type}_N{N}_K{K}_T{T}_every{fail_every}.csv"
+def _csv_path(graph_type, N, K, T, tag):
+    return DATA_DIR / f"fault_tolerance_{graph_type}_N{N}_K{K}_T{T}_{tag}.csv"
 
 
 def compute_ft_data(graph_type, N, K, T, fail_every, sigma=1.0, c=2.0, seed=0, p=None,
-                     fail_start=None):
+                     fail_start=None, fail_at=None):
     """
     Runs one EigenTree-FT trajectory over horizon T with a hub failure
-    injected every `fail_every` rounds starting at `fail_start` (default
-    `fail_every`; e.g. fail_every=1000 on T=5000 injects failures at
-    t=1000,2000,3000,4000; fail_start=2000 instead gives
+    injected either at the explicit rounds in `fail_at` (a list, takes
+    precedence if given), or every `fail_every` rounds starting at
+    `fail_start` (default `fail_every`; e.g. fail_every=1000 on T=5000
+    injects failures at t=1000,2000,3000,4000; fail_start=2000 instead gives
     t=2000,3000,4000), and directly tests the Fault Tolerance section's
     claims:
       1. Failover correctness: after each promotion, the tree is checked to
@@ -546,7 +547,7 @@ def compute_ft_data(graph_type, N, K, T, fail_every, sigma=1.0, c=2.0, seed=0, p
     run_seed = int(rng.randint(0, 2**31))
 
     G = make_graph(graph_type, N, p=p, seed=graph_seed)
-    fail_schedule = list(range(fail_start, T, fail_every))
+    fail_schedule = list(fail_at) if fail_at is not None else list(range(fail_start, T, fail_every))
 
     np.random.seed(run_seed)
     env = BanditEnv(means, sigma=sigma)
@@ -565,8 +566,8 @@ def compute_ft_data(graph_type, N, K, T, fail_every, sigma=1.0, c=2.0, seed=0, p
     }
 
 
-def save_ft_csv(data, graph_type, N, K, T, fail_every):
-    out = _csv_path(graph_type, N, K, T, fail_every)
+def save_ft_csv(data, graph_type, N, K, T, tag):
+    out = _csv_path(graph_type, N, K, T, tag)
     T_len = len(data["group_ft"])
     with open(out, "w", newline="") as f:
         writer = csv.writer(f)
@@ -605,8 +606,8 @@ def save_ft_csv(data, graph_type, N, K, T, fail_every):
     print(f"  All post-failover trees valid: {all_valid}")
 
 
-def load_ft_csv(graph_type, N, K, T, fail_every):
-    out = _csv_path(graph_type, N, K, T, fail_every)
+def load_ft_csv(graph_type, N, K, T, tag):
+    out = _csv_path(graph_type, N, K, T, tag)
     with open(out, newline="") as f:
         rows = list(csv.DictReader(f))
     group_ft = np.array([float(r["group_regret"]) for r in rows])
@@ -689,7 +690,7 @@ def _draw_graph_tree_panel(ax, G, pos, hub, parent, N, title, dead_nodes=()):
     ax.axis("off")
 
 
-def plot_trees(data, graph_type, N, K, T, fail_every):
+def plot_trees(data, graph_type, N, K, T, tag):
     """Graph + induced routing tree: the initial tree, then the tree after
     each failover. The 'before' state of failure e+1 is identical to the
     'after' state of failure e (plus one more dead node), so it is not
@@ -732,13 +733,13 @@ def plot_trees(data, graph_type, N, K, T, fail_every):
                  f"hub failure\n{graph_type.upper()} graph, $N={N}$ "
                  f"(dead nodes in gray, faded edges = non-tree graph edges)", fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    out = FT_DIR / f"fault_tolerance_trees_{graph_type}_N{N}_K{K}_T{T}_every{fail_every}.pdf"
+    out = FT_DIR / f"fault_tolerance_trees_{graph_type}_N{N}_K{K}_T{T}_{tag}.pdf"
     fig.savefig(out)
     plt.close(fig)
     print(f"  Saved {out}")
 
 
-def plot_ft(data, graph_type, N, K, T, fail_every):
+def plot_ft(data, graph_type, N, K, T, tag):
     fig, ax = plt.subplots(figsize=(9, 5))
     ts = np.arange(1, len(data["group_ft"]) + 1)
 
@@ -758,32 +759,34 @@ def plot_ft(data, graph_type, N, K, T, fail_every):
            transform=ax.transAxes, fontsize=9, va="top", ha="left",
            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.9))
 
+    fail_str = ",".join(str(t) for t in data["fail_schedule"])
     ax.set_xlabel("Round $t$")
     ax.set_ylabel(r"Group cumulative regret $\sum_i R_i(t)$")
     ax.set_title(f"EigenTree-FT under repeated hub failure -- {graph_type.upper()} graph\n"
-                 f"$N={N}$, $K={K}$, $T={T}$, hub fails every {fail_every} rounds")
+                 f"$N={N}$, $K={K}$, $T={T}$, hub fails at $t={fail_str}$")
     ax.legend(fontsize=9, loc="lower right")
     ax.grid(True, alpha=0.3)
 
     fig.tight_layout()
-    out = FT_DIR / f"fault_tolerance_{graph_type}_N{N}_K{K}_T{T}_every{fail_every}.pdf"
+    out = FT_DIR / f"fault_tolerance_{graph_type}_N{N}_K{K}_T{T}_{tag}.pdf"
     fig.savefig(out)
     plt.close(fig)
     print(f"  Saved {out}")
 
 
 def run_experiment(graph_type, N, K, T, fail_every, sigma, c, mode="all", seed=0, p=None,
-                    fail_start=None):
+                    fail_start=None, fail_at=None):
+    tag = ("at" + "-".join(str(t) for t in fail_at)) if fail_at is not None else f"every{fail_every}"
     if mode in ("compute", "all"):
         data = compute_ft_data(graph_type, N, K, T, fail_every, sigma=sigma, c=c, seed=seed, p=p,
-                                fail_start=fail_start)
-        save_ft_csv(data, graph_type, N, K, T, fail_every)
+                                fail_start=fail_start, fail_at=fail_at)
+        save_ft_csv(data, graph_type, N, K, T, tag)
     if mode == "compute":
         return
     if mode == "plot":
-        data = load_ft_csv(graph_type, N, K, T, fail_every)
-    plot_ft(data, graph_type, N, K, T, fail_every)
-    plot_trees(data, graph_type, N, K, T, fail_every)
+        data = load_ft_csv(graph_type, N, K, T, tag)
+    plot_ft(data, graph_type, N, K, T, tag)
+    plot_trees(data, graph_type, N, K, T, tag)
 
 
 # ============================================================
@@ -801,6 +804,8 @@ def parse_args():
     ap.add_argument("--fail-every", type=int, default=1000)
     ap.add_argument("--fail-start", type=int, default=None,
                     help="round of the first failure (default: --fail-every)")
+    ap.add_argument("--fail-at",    type=int, nargs="+", default=None,
+                    help="explicit list of failure rounds, overrides --fail-every/--fail-start")
     ap.add_argument("--sigma",      type=float, default=1.0)
     ap.add_argument("--c",          type=float, default=2.0)
     ap.add_argument("--seed",       type=int, default=0)
@@ -812,4 +817,4 @@ if __name__ == "__main__":
     args = parse_args()
     run_experiment(args.graph, args.N, args.K, args.T, args.fail_every,
                    args.sigma, args.c, mode=args.mode, seed=args.seed, p=args.p,
-                   fail_start=args.fail_start)
+                   fail_start=args.fail_start, fail_at=args.fail_at)

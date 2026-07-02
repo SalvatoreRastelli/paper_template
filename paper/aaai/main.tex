@@ -156,8 +156,11 @@ By Proposition~\ref{prop:aggbcast}, the hub's aggregate $B$ after $D$ uplink rou
  & \merw-UCB & \merw-BAI \\
 \midrule
 $\textsc{Init}$ & pull each $k\in\{1,..,K\}$ once, $K$ rounds & $\sigma_i \leftarrow S_0$, 0 rounds \\
+\addlinespace
 $\textsc{Local}$- $\textsc{Pull}$ & UCB-maximizing arm, 1 round & every $k\in S_{r-1}$, $L_r$ times \\
+\addlinespace
 $\textsc{Hub}$- $\textsc{Decide}$ & UCB-pull on $B$; never stops early & eliminate below $\epsilon_r$; stop when $|S_r|{=}1$ \\
+\addlinespace
 Downlink $m$ & aggregate $(\hat n,\hat s,P)$ & surviving set $S_r$ \\
 \bottomrule
 \end{tabular}
@@ -165,8 +168,8 @@ Downlink $m$ & aggregate $(\hat n,\hat s,P)$ & surviving set $S_r$ \\
 
 \begin{figure}[tb]
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/MERW_visualization/merw_tree_er_N20.pdf}
-    \caption{MERW centrality and routing tree on an Erd\H{o}s--R\'{e}nyi graph ($N=20$). \emph{Left}: undirected graph, nodes colored by $\psi_i/\psi_{\max}$. \emph{Center}: routing subtree overlaid on the graph, hub ringed in gold. \emph{Right}: induced directed tree, hierarchical layout, arrows child $\to$ parent.}
+    \includegraphics[width=0.95\columnwidth]{results/MERW_visualization/merw_tree_er_N20_p0.5.pdf}
+    \caption{MERW centrality and routing tree on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$). \emph{Left}: undirected graph, nodes colored by $\psi_i/\psi_{\max}$. \emph{Center}: routing subtree overlaid on the graph, hub ringed in gold. \emph{Right}: induced directed tree, hierarchical layout, arrows child $\to$ parent.}
     \label{fig:merw_viz_er}
 \end{figure}
 
@@ -195,14 +198,18 @@ Take any node $u$ that is not $h^\star$ and not one of its neighbors. Counting $
 
 Since $D' \geq 1$ on any connected graph with more than one node, Theorem~\ref{thm:mdst-gap} says \merw{}'s tree is at most one hop deeper than the true MDST whenever this condition holds, and by Proposition~\ref{prop:hubdeg} it is easier to satisfy the more concentrated $G$'s spectral radius $\lambda$ is, without requiring every node in $G$ to be well-connected -- only $h^\star$ and the nodes outside its immediate neighborhood.
 
-\paragraph{2-connected graphs.} Theorem~\ref{thm:mdst-gap}'s hypothesis is a strong density requirement. A weaker, purely topological condition -- $G$ remaining connected after removing any single node -- is also the exact requirement Section~\ref{sec:ft} places on $G$ for hub failover to work at all, so it is already assumed elsewhere in this paper.
+\paragraph{Well-connected graphs.} Theorem~\ref{thm:mdst-gap}'s hypothesis is a strong density requirement. A weaker condition -- the graph's algebraic connectivity $\lambda_2$ (the second-smallest Laplacian eigenvalue) bounded away from $0$ -- already bounds the gap logarithmically in $n$, with no density requirement on individual nodes.
 
-\begin{conjecture}[Depth gap under 2-connectivity]
-\label{conj:mdst-2conn}
-If $G$ is 2-connected, then $D \leq D' + 1$.
-\end{conjecture}
+\begin{theorem}[Depth gap under bounded algebraic connectivity]
+\label{thm:mdst-gap-spectral}
+Let $\lambda_2$ be the algebraic connectivity of $G$ and $\lambda_\infty$ its largest Laplacian eigenvalue. Then
+$$D - D' \leq \left\lceil \frac{\lambda_\infty + \lambda_2}{4\lambda_2} \ln(n-1) \right\rceil.$$
+\end{theorem}
+\begin{proof}
+Mohar's diameter bound \citep{mohar1991} gives $\mathrm{diam}(G) \leq 2\left\lceil \frac{\lambda_\infty+\lambda_2}{4\lambda_2}\ln(n-1)\right\rceil$. Since $D = \mathrm{ecc}_G(h^\star) \leq \mathrm{diam}(G)$ and $D' = R(G) \geq \mathrm{diam}(G)/2$, we get $D - D' \leq \mathrm{diam}(G)/2 \leq \left\lceil \frac{\lambda_\infty+\lambda_2}{4\lambda_2}\ln(n-1)\right\rceil$.
+\end{proof}
 
-We tested Conjecture~\ref{conj:mdst-2conn} against counterexamples on over 8000 random 2-connected Erd\H{o}s--R\'{e}nyi graphs, $n \in [5,50]$ and $p \in [0.05, 0.6]$, including hand-constructed theta graphs (a cycle plus one extra path joining two of its nodes) and dense-cluster-with-two-disjoint-paths graphs designed to stress the bound: no violation was found. We were not able to prove it, and are not aware of an existing theorem of this form; the closest related result bounds any vertex's eccentricity by twice the radius with no connectivity assumption \citep{buckleyharary1990}, a substantially weaker guarantee. We leave the proof as an open problem.
+Unlike Theorem~\ref{thm:mdst-gap}, this bound does not rely on $h^\star$'s own degree at all: it holds for the eccentricity of \emph{any} vertex, including $h^\star$, purely from the graph's global expansion. It grows with $n$ rather than staying constant, but it applies to a much wider class of graphs, including sparse ones, as long as they do not have a bottleneck that makes $\lambda_2$ small -- a long path or cycle, whose algebraic connectivity vanishes as $n$ grows, is exactly the kind of graph excluded by this hypothesis, and is also where the worst-case behavior below is observed.
 
 \merw{} does not try to avoid the worst case directly: doing so would require the same all-pairs distance information that exact MDST construction depends on (Section~\ref{sec:related}), which is precisely the global knowledge \merw{} is designed to do without.
 
@@ -229,6 +236,8 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
 \section{Fault Tolerance}
 \label{sec:ft}
 
+A fully centralized coordinator has an unavoidable weakness: if the coordinator fails, the whole system fails with it, since every agent's information passes through that single point. \merw{}'s emergent hub inherits exactly this weakness by construction -- it is a single node running the decision rule on globally aggregated statistics -- so decentralizing the search for a coordinator does not, by itself, remove the risk that centralizing coordination around it re-introduces. \merwft{} closes this gap: it renders the protocol robust to the failure of any single node, hub or not, so that the practical benefit of centralized-style coordination is not paid for with the fragility of an actual centralized system.
+
 Every node in $\mathcal{T}$ is a potential failure point, and \merwft{} must account for the failure of \emph{any} node, not only the hub. The consequences are highly asymmetric, however. The hub alone runs the decision rule on globally aggregated statistics; if it fails permanently, no downlink is broadcast, no agent learns the outcome of the current round, and the entire coordination structure collapses. A non-hub node, by contrast, is a relay for one subtree: its failure disrupts only the agents below it, while the hub and the rest of the tree continue operating normally. We treat the two cases in turn, hub failure first as the more consequential one.
 
 \subsection{Hub Failure}
@@ -249,9 +258,8 @@ If $\delta(G) \geq n/2$, where $\delta(G)$ is the minimum degree over all nodes,
 Suppose not: some node $v$ is a cut vertex, so $G - v$ splits into components $C_1, \dots, C_m$ ($m\geq2$). Let $u$ be in the smallest such component, of size at most $\lfloor(n-1)/2\rfloor$. Every neighbor of $u$ is either $v$ or another node of that same component, so $\deg(u) \leq \lfloor(n-1)/2\rfloor < n/2$, contradicting $\delta(G) \geq n/2$.
 \end{proof}
 
-This is a strong requirement -- every node needs a neighborhood covering roughly half the network -- but it holds without exception once satisfied, unlike the empirical regularity of Conjecture~\ref{conj:mdst-2conn} below.
-
 \begin{proposition}[Failover correctness and completeness]
+\label{prop:ft-correct}
 After promotion, the network forms a valid spanning tree rooted at $b^\star$ with height $D_{\mathrm{new}} \leq D+1$ and no cycles. The procedure completes in $O(\mathrm{diam}(G))$ rounds in general, and $O(1)$ rounds when $b^\star$ is directly connected to all former siblings.
 \end{proposition}
 
@@ -262,8 +270,13 @@ A subtlety arises during the (possibly multi-round) re-routing step: siblings th
 When a non-hub node $v$ at depth $d_v$ fails, the impact is local: only the subtree rooted at $v$ is disrupted. Failure is detected by $v$'s parent, the fastest possible locus of detection (children would take $D-d_v$ hops to notice, and the hub a full cycle). Rather than scanning neighbors at failure time, each node precomputes a \emph{swap parent} once depths are established after the first cycle, following the best-swap-edge framework of Nardelli et al.\ \citep{nardelli2003}, minimizing the maximum depth increase across its subtree. Re-attachment then takes exactly one round.
 
 \begin{proposition}[Non-hub failover correctness]
+\label{prop:nonhub-correct}
 After re-attachment of all orphaned children of a failed node $v$, the remaining live nodes form a valid spanning tree with height $D_{\mathrm{new}} \leq D + |\mathrm{ch}(v)|$ and no cycles.
 \end{proposition}
+
+\subsection{Recovery}
+
+The mechanisms above assume a failed node stays down; the most general version of \merwft{} also lets it come back. A recovering node $v$ has no reliable state -- it may have missed any number of promotions and re-routings -- so rather than trying to recover its old position in $\mathcal{T}$, it simply rejoins as if it were a new node: it sends a \textsc{Ping} to each graph neighbor, and any live neighbor $j$ that is itself already attached replies with its current depth $d_j$. $v$ attaches as a child of whichever neighbor replies with the smallest $d_j$ (ties broken by smallest identity, as in the initial max-flooding), sets $d_v = d_j + 1$, and waits for the next downlink through $j$ to populate its mirrored state $(\hat n, \hat s)$, exactly as any other node does after a cycle boundary. No other edge of $\mathcal{T}$ changes: $v$ was disconnected, so attaching it via a single new edge to an already-valid tree preserves the spanning-tree and no-cycle invariant of Propositions~\ref{prop:ft-correct} and~\ref{prop:nonhub-correct} without re-deriving them. This also composes with repeated hub failure: if $v$ happens to reconnect through the current backup or a previously promoted hub, recovery proceeds identically, since it depends only on $j$ already being live and attached, not on which node $j$ is.
 
 \section{Experiments}
 \label{sec:experiments}
@@ -290,18 +303,18 @@ For best arm identification ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$), F
 
 \FloatBarrier
 
-To validate the failover mechanism of Section~\ref{sec:ft} directly, we run \merwft{} on an ER graph ($N=20$, $p=0.5$, $K=10$, $T=5000$) and kill the hub at $t=2000,3000,4000$, letting the backup promote itself and the network recover each time. Figure~\ref{fig:ft_regret} shows the resulting group regret: every failure is followed by a recovery within a handful of rounds, and the post-recovery trajectory rejoins the same growth rate as before the failure, with no lasting penalty. Figure~\ref{fig:ft_trees} shows the induced routing tree on the underlying graph immediately after each failure, confirming that the backup correctly re-roots the tree and reintegrates every former sibling of the failed hub.
+To validate the failover mechanism of Section~\ref{sec:ft} directly, we run \merwft{} on an ER graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) and kill the hub at $t=500,1000,1500$, letting the backup promote itself and the network recover each time. Figure~\ref{fig:ft_regret} shows the resulting group regret: every failure is followed by a recovery within a handful of rounds, and the post-recovery trajectory rejoins the same growth rate as before the failure, with no lasting penalty. Figure~\ref{fig:ft_trees} shows the induced routing tree on the underlying graph immediately after each failure, confirming that the backup correctly re-roots the tree and reintegrates every former sibling of the failed hub.
 
 \begin{figure}[tb]
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T5000_every1000.pdf}
-    \caption{Group regret for \merwft{} on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=5000$) with the hub killed at $t=2000,3000,4000$. Dashed lines mark failures, dotted lines mark recovery. All three failures are recovered from.}
+    \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T2000_at500-1000-1500.pdf}
+    \caption{Group regret for \merwft{} on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) with the hub killed at $t=500,1000,1500$. Dashed lines mark failures, dotted lines mark recovery. All three failures are recovered from.}
     \label{fig:ft_regret}
 \end{figure}
 
 \begin{figure}[tb]
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_trees_er_N20_K10_T5000_every1000.pdf}
+    \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_trees_er_N20_K10_T2000_at500-1000-1500.pdf}
     \caption{Underlying graph and induced routing tree: initial, and immediately after each of the three hub failures. Faded edges are non-tree graph edges; arrows point from child to parent; dead nodes are shown in gray.}
     \label{fig:ft_trees}
 \end{figure}
@@ -311,7 +324,7 @@ To validate the failover mechanism of Section~\ref{sec:ft} directly, we run \mer
 
 \merw{} shows that a coordinator can emerge from purely local, decentralized computation, and that this emergent coordinator is statistically sufficient for any decision rule depending only on globally aggregated statistics -- demonstrated here for regret minimization and best arm identification, both matching centralized performance up to a bounded communication overhead. \merwft{} shows that the resulting failure points, hub and non-hub alike, can be removed at zero or near-zero steady-state cost.
 
-The main limitations are: the protocol assumes a connected, undirected graph, static except for the node failures handled by \merwft{}; the communication overhead $D$ can be large on sparse or path-like graphs; and the BAI variant requires agents to know $N$ while the regret variant does not. \merwft{} handles fail-stop failures: a node either works correctly or goes permanently silent, detected by timeout. It does not handle Byzantine failures, where a node stays active but sends incorrect or conflicting messages, and has no mechanism for simultaneous hub-and-backup failure. This is a deliberate scope choice, not an oversight: the motivation for \merw{} is that a single centralized coordinator is a single point of failure under ordinary crashes, the same failure mode that motivates decentralization in the first place, and \merwft{} closes exactly that gap. Tolerating adversarial nodes is a different, harder problem with its own established toolkit, and combining it with \merw{}'s emergent coordination is left for future work. We view emergent, MERW-based coordination as a general tool applicable well beyond the two instantiations studied here, and leave a tight regret bound (Corollary~\ref{cor:regret} states only the leading-order behavior) and the interaction between backup staleness and regret for future work.
+The main limitations are: the protocol assumes a connected, undirected graph, static except for the node failures handled by \merwft{}; the communication overhead $D$ can be large on sparse or path-like graphs; and the BAI variant requires agents to know $N$ while the regret variant does not. \merwft{} handles fail-stop failures: a node either works correctly, goes silent (detected by timeout), or comes back and rejoins via the recovery mechanism of Section~\ref{sec:ft}. It does not handle Byzantine failures, where a node stays active but sends incorrect or conflicting messages, and has no mechanism for simultaneous hub-and-backup failure. This is a deliberate scope choice, not an oversight: the motivation for \merw{} is that a single centralized coordinator is a single point of failure under ordinary crashes, the same failure mode that motivates decentralization in the first place, and \merwft{} closes exactly that gap. Tolerating adversarial nodes is a different, harder problem with its own established toolkit, and combining it with \merw{}'s emergent coordination is left for future work. We view emergent, MERW-based coordination as a general tool applicable well beyond the two instantiations studied here, and leave a tight regret bound (Corollary~\ref{cor:regret} states only the leading-order behavior) and the interaction between backup staleness and regret for future work.
 
 \bibliography{references}
 

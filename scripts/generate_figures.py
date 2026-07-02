@@ -48,7 +48,6 @@ EXTRA_GRAPH_N = [
     ("cycle", 8),
     ("cycle", 10),
     ("ba", 100),
-    ("er", 100),
 ]
 
 REGRET_GRAPHS = ["ba", "er", "barbell", "lollipop", "chain", "star"]
@@ -77,6 +76,10 @@ def generate(mode):
         run([PYTHON, "visualize_merw.py", "--graph", graph, "--N", str(n),
              "--seed", "0", "--mode", mode])
 
+    # AAAI paper's Figure 1: ER, N=20, p=0.5.
+    run([PYTHON, "visualize_merw.py", "--graph", "er", "--N", "20", "--p-er", "0.5",
+         "--seed", "0", "--mode", mode])
+
     # Relay cycle diagram
     run([PYTHON, "visualize_cycle.py", "--mode", mode])
 
@@ -99,10 +102,10 @@ def generate(mode):
     run([PYTHON, "best_arm_id.py", "--graph", "er", "--K", "10",
          "--bai-runs", "50", "--delta", "0.05", "--mode", mode])
 
-    # Fault-tolerance experiment: hub killed at t=2000,3000,4000, seed chosen
+    # Fault-tolerance experiment: hub killed at t=500,1000,1500, seed chosen
     # to avoid a promotion edge case on this specific ER graph draw.
     run([PYTHON, "fault_tolerance.py", "--graph", "er", "--N", "20", "--p", "0.5",
-         "--K", "10", "--T", "5000", "--fail-every", "1000", "--fail-start", "2000",
+         "--K", "10", "--T", "2000", "--fail-at", "500", "1000", "1500",
          "--seed", "2", "--mode", mode])
 
 
