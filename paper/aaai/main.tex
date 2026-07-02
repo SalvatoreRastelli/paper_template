@@ -30,7 +30,8 @@
 \newcommand{\merw}{EigenTree}
 \newcommand{\merwft}{EigenTree-FT}
 
-\title{EigenTree: A Decentralized, Fault-Tolerant Communication Protocol Achieving Centralized Multi-Armed Bandit Results}
+% \title{EigenTree: A Decentralized Communication Protocol Achieving Centralized Multi-Armed Bandit Results}
+\title{EigenTree: a Centralizing Communication Protocol\\for Decentralized Multi-Agent Multi-Armed Bandit}
 \author{
     Anonymous Submission
 }
@@ -43,12 +44,27 @@
 \maketitle
 
 \begin{abstract}
-In decentralized cooperative learning, no agent has global knowledge, and yet centralized coordination is statistically efficient.
-We propose \merw{}, a decentralized communication protocol on undirected graphs that establishes, from purely local interactions, a de-facto coordinator among the agents.
-\merw{} uses eigenvector centrality---as computed by a gossip-based power iteration---to 1) choose the most central node as coordinator, and 2) construct a routing tree, rooted at the coordinator node, which spans the graph.
-Information flows according to this routing tree: from leaves to root during the aggregation phase, and vice versa during the broadcasting phase.
-Thus, a centralized aggregator emerges out of purely decentralized interactions, at the cost of introducing appropriate communication rounds between agents in the tree.
-The resulting protocol can be directly used in various decentralized cooperative learning setups, of which we show two---regret minimization and best arm identification---where the method recovers centralized-like results.
+	Centralized learning achieves the best statistical performance by
+	aggregating all observations, but such global coordination is unavailable
+	in decentralized cooperative systems.
+	We propose \merw{}, a decentralized communication protocol on undirected
+	graphs that establishes, from purely local interactions, a coordinator
+	among the agents.
+	\merw{} uses eigenvector centrality to 1) choose the most central node as
+	coordinator, and 2) construct a routing tree, rooted at the coordinator
+	node, which spans the graph.
+	Information flows according to this routing tree: from leaves to root
+	during the aggregation phase, and vice versa during the broadcasting phase.
+	We prove that, under this protocol, a bandit algorithm based on the
+	coordinator's information state achieves the same statistical performance
+	as a centralized instance, at the cost of $O(D)$ communication rounds, with
+	$D$ the tree's diameter.
+	The protocol can be used in various decentralized cooperative learning
+	setups, of which we show two---regret minimization and best arm
+	identification---where the method recovers centralized-like results in
+	finite time.
+	We further present a fault-tolerant version of the protocol, addressing the
+	coordinator's structural weakness as a single point of failure.
 \end{abstract}
 
 \section{Introduction}
