@@ -13,3 +13,4 @@ __pycache__/
 *.pyc
 .generated
 .DS_Store
+CLAUDE.md
