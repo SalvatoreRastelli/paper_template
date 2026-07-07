@@ -154,19 +154,25 @@ Fix any decision round $r$. By Proposition~\ref{prop:aggbcast}, after $D$ rounds
 \subsection{Cost of Not Using the Minimum Diameter Tree}
 \label{sec:mdst-gap}
 
-\merw{} roots its tree at $h^\star$, the highest-centrality node, not at the graph's absolute center, the root that would minimize tree depth and give a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. So the tree depth $D = \mathrm{ecc}_G(h^\star)$ can exceed $D' = R(G)$, the depth the MDST would achieve. We characterize this gap in three regimes: an unrestricted worst case, a dense-graph case where it is provably small, and the intermediate 2-connected case relevant to Section~\ref{sec:ft}.
+\merw{} roots its tree at $h^\star$, the highest-centrality node, not at the graph's absolute center, the root that would minimize tree depth and give a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. So the tree depth $D = \mathrm{ecc}_G(h^\star)$, which sets the $O(D)$ communication overhead of Theorem~\ref{thm:coordinator}, can exceed $D' = R(G)$, the depth an MDST would achieve. We bound this gap in two regimes, first an unrestricted worst case and then two conditions, one on degree and one on spectral expansion, under which the gap is small.
 
 \paragraph{Worst case.} Take a graph formed by attaching a high-degree cluster to the end of a long path: $h^\star$ settles inside the cluster, since that is where centrality concentrates, while the true center sits near the path's midpoint. As the path grows, $D$ approaches $2D'$, matching the tight general bound $D' \geq D(G)/2$ that holds for \emph{any} choice of root \citep{hakimi1964}; \merw{}'s hub does no better than an arbitrary one here. This construction has a cut vertex on the path.
 
+The bound below needs $h^\star$ to have enough neighbors that any other node is reachable in a couple of hops, so we first show that being the highest-centrality node already guarantees a minimum degree, with no extra assumption on $G$.
+
 \begin{proposition}[Hub degree lower bound]
 \label{prop:hubdeg}
-$\deg(h^\star) \geq \lambda$, the spectral radius of $G$.
+The hub's degree is at least the graph's spectral radius: $\deg(h^\star) \geq \lambda$.
 \end{proposition}
 
 \begin{theorem}[Dense graphs: depth at most 2]
 \label{thm:mdst-gap}
 Let $\delta_{\bar N}(h^\star) = \min_{u \notin \mathcal{N}_G(h^\star)\cup\{h^\star\}} \deg(u)$ be the smallest degree among the nodes $h^\star$ is not directly connected to. If $\deg(h^\star) + \delta_{\bar N}(h^\star) \geq n$, then $D \leq 2$.
 \end{theorem}
+
+\begin{proof}
+Take any $u \neq h^\star$ with $u \notin \mathcal{N}_G(h^\star)$; every neighbor of $h^\star$ already has $d(h^\star,\cdot)=1$, so it suffices to show $d(h^\star,u)\leq2$ for such $u$. Both $\mathcal{N}_G(h^\star)$ and $\mathcal{N}_G(u)$ are subsets of $V\setminus\{h^\star,u\}$, and since $\deg(u)\geq\delta_{\bar N}(h^\star)$, their sizes satisfy $|\mathcal{N}_G(h^\star)|+|\mathcal{N}_G(u)| \geq \deg(h^\star)+\delta_{\bar N}(h^\star) \geq n$ by the hypothesis. Since $|V\setminus\{h^\star,u\}|=n-2 < n$, the two neighbor sets cannot be disjoint, so some $w$ is a common neighbor, giving $d(h^\star,u)\leq2$ via $h^\star\text{-}w\text{-}u$.
+\end{proof}
 
 Since $D' \geq 1$ on any connected graph with more than one node, Theorem~\ref{thm:mdst-gap} says \merw{}'s tree is at most one hop deeper than the true MDST whenever this condition holds. By Proposition~\ref{prop:hubdeg} it is easier to satisfy the more concentrated $G$'s spectral radius $\lambda$ is, and it requires only $h^\star$ and the nodes outside its immediate neighborhood to be well-connected, not every node in $G$.
 
@@ -180,7 +186,9 @@ D - D' \leq \left\lceil \frac{\lambda_\infty + \lambda_2}{4\lambda_2} \ln(n-1) \
 \]
 \end{theorem}
 
-Unlike Theorem~\ref{thm:mdst-gap}, this bound does not rely on $h^\star$'s own degree at all: it holds for the eccentricity of \emph{any} vertex, including $h^\star$, purely from the graph's global expansion. It grows with $n$ rather than staying constant, but it applies to a much wider class of graphs, including sparse ones, as long as they do not have a bottleneck that makes $\lambda_2$ small. A long path or cycle, whose algebraic connectivity vanishes as $n$ grows, is exactly the kind of graph excluded by this hypothesis, and is also where the worst-case behavior below is observed.
+Unlike Theorem~\ref{thm:mdst-gap}, this bound does not rely on $h^\star$'s own degree at all: it holds for the eccentricity of \emph{any} vertex, including $h^\star$, purely from the graph's global expansion. It grows with $n$ rather than staying constant, but it applies to a much wider class of graphs, including sparse ones, as long as they do not have a bottleneck that makes $\lambda_2$ small. A long path or cycle, whose algebraic connectivity vanishes as $n$ grows, is exactly the kind of graph excluded by this hypothesis, and is also where the worst-case behavior above is observed.
+
+Theorem~\ref{thm:mdst-gap} already yields a high-probability guarantee on random graphs with no new proof: on an Erd\H{o}s--R\'{e}nyi graph $G(n,p)$ with $p$ bounded above $1/2$ by a constant margin, every node's degree concentrates tightly around its mean $(n-1)p$, so $\deg(h^\star)+\delta_{\bar N}(h^\star)$ exceeds $n$ with probability approaching 1 as $n$ grows. So on dense enough Erd\H{o}s--R\'{e}nyi graphs, the difference between $D$ and $D'$ is, with high probability, negligible: at most one hop.
 
 \merw{} does not try to avoid the worst case directly: doing so would require the same all-pairs distance information that exact MDST construction depends on (Section~\ref{sec:related}), which is precisely the global knowledge \merw{} is designed to do without.
 
@@ -330,7 +338,7 @@ To validate the failover mechanism of Section~\ref{sec:ft} directly, we run \mer
 \section{Discussion}
 \label{sec:discussion}
 
-Theorem~\ref{thm:mdst-gap} already gives a route to a high-probability guarantee on random graphs, without needing a new proof: on an Erd\H{o}s--R\'{e}nyi graph $G(n,p)$ with $p$ bounded above $1/2$ by a constant margin, every node's degree concentrates tightly around its mean $(n-1)p$, so $\deg(h^\star) + \delta_{\bar N}(h^\star)$ exceeds $n$ with probability approaching 1 as $n$ grows, placing the graph inside Theorem~\ref{thm:mdst-gap}'s hypothesis and forcing $D \leq 2$. So on dense enough Erd\H{o}s--R\'{e}nyi graphs, \merw{}'s tree is, with high probability, no more than one hop deeper than a true minimum diameter spanning tree. A complete, general relation between $D$ and $D'$ that covers sparser graphs and other random graph models without this density margin is left for future work.
+Section~\ref{sec:mdst-gap} shows the gap between $D$ and $D'$ is small on dense or well-expanding graphs; a complete relation covering sparser graphs and other random graph models is left for future work.
 
 The protocol assumes a connected, undirected graph, static apart from the node failures \merwft{} handles. The communication overhead $D$ can be large on sparse or path-like graphs, exactly the regime identified in Section~\ref{sec:mdst-gap}. The BAI variant requires agents to know $N$ in advance to compute Hillel's pull schedule, while the regret variant needs no such prior knowledge, learning everything it needs from the protocol itself. \merwft{} covers fail-stop failures: a node works correctly, goes silent, or comes back and rejoins through the recovery mechanism of Section~\ref{sec:ft}. It has no mechanism for a node that stays active but sends incorrect messages, or for the hub and its backup failing at the same time; both are left for future work.
 
