@@ -48,10 +48,10 @@
 	Centralized learning achieves the best statistical performance by
 	aggregating all observations, but such global coordination is unavailable
 	in decentralized cooperative systems.
-	We propose \merw{}, a decentralized communication protocol on undirected
+	We propose \merw, a decentralized communication protocol on undirected
 	graphs that establishes, from purely local interactions, a coordinator
 	among the agents.
-	\merw{} uses eigenvector centrality to 1) choose the most central node as
+	\merw uses eigenvector centrality to 1) choose the most central node as
 	coordinator, and 2) construct a routing tree, rooted at the coordinator
 	node, which spans the graph.
 	Information flows according to this routing tree: from leaves to root
@@ -70,24 +70,40 @@
 
 \section{Introduction}
 
-In cooperative multi-agent learning, no individual agent has access to the global state of the system, yet the best-performing strategy is usually the one available to a centralized decision maker with a full view of everyone's observations. This is the setting whenever $N$ agents connected by an undirected graph $G = (V, E)$ must repeatedly act and learn from feedback while exchanging only local messages with their graph neighbors. Existing approaches close the gap to centralized performance either by symmetric averaging, where every agent maintains its own estimate and no coordinator ever exists (e.g., Coop-UCB2 \citep{landgren2021distributed}), or by assuming a communication model rich enough that any agent can reach any other in one step (e.g., the all-to-all broadcast of Hillel et al.\ \citep{hillel2013distributed}). Both work, but neither asks whether a coordinator could arise from the graph itself, without being assumed into existence or requiring dense connectivity.
+In cooperative multi-agent learning, no individual agent has access to the
+global state of the system, but the best-performing strategy is usually the one
+available to a centralized decision maker with a full view of everyone's
+observations. This is the setting whenever $N$ agents connected by an
+undirected graph $G = (V, E)$ must repeatedly act and learn from feedback while
+exchanging only local messages with their graph neighbors. Existing approaches
+close the gap to centralized performance either by symmetric averaging, where
+every agent maintains its own estimate and no coordinator ever exists (e.g.,
+Coop-UCB2 \citep{landgren2021distributed}), or by assuming a communication
+model rich enough that any agent can reach any other in one step (e.g., the
+all-to-all broadcast of \cite{hillel2013distributed}). 
 
-\merw{} answers this question constructively: a coordinator \emph{emerges} from
-the graph structure, identified from purely local computation, with no agent
-ever seeing the global topology or knowing $N$ in advance. The key idea is that
-eigenvector centrality, computed via a fully decentralized gossip
-protocol \citep{jelasity2007asynchronous}, identifies the structurally most
-central node in $G$. One can then construct a routing tree spanning the graph
-via max-flooding, again only using local information.
-Once the tree is in place, the hub acts as a de-facto central coordinator:
-every agent routes its observations up toward the hub, which sees the globally
-aggregated picture and broadcasts its decisions back down. We prove that this
-emergent coordinator is statistically equivalent to a true centralized
-coordinator for any decision rule that depends only on globally aggregated
-per-agent statistics, at the cost of a bounded communication overhead
-determined by the tree's depth.
+We instead ask whether the communication graph $G$ itself can select which
+agents should play a coordinating role. This motivates measuring an agent's
+importance through a global notion of centrality. Building on this idea, we
+propose \merw, a method to \emph{construct}, in a completely decentralized
+way, a communication structure according to the eigenvector centrality induced
+by $G$.
 
-This last property is what makes \merw{} a \emph{protocol} rather than a single
+In \merw, a coordinator \emph{emerges} from the graph structure, identified
+from purely local computation, with no agent ever seeing the global topology or
+knowing $N$ in advance. The key idea is that eigenvector centrality, computed
+via a fully decentralized gossip protocol \citep{jelasity2007asynchronous},
+can be used to identify a ``most central'' node in $G$. One can then construct
+a routing tree which spans $G$ via max-flooding, again only using local
+information. Once the tree is in place, the hub acts as a de-facto central
+coordinator: every agent routes its observations up toward the hub, which sees
+the globally aggregated picture and broadcasts its decisions back to the other
+nodes. We prove that this emergent coordinator is statistically equivalent to a
+true centralized coordinator for any decision rule that depends only on
+globally aggregated per-agent statistics, at the cost of a bounded
+communication overhead determined by the tree's depth.
+
+This last property is what makes \merw a \emph{protocol} rather than a single
 algorithm: any decentralized cooperative-learning task whose decision rule fits
 this mold\todo{Which\\mold?} can be run over the same emergent hub-and-tree structure by supplying
 two application-specific rules, namely 1) what each agent contributes locally and
@@ -132,7 +148,7 @@ rounds.
 under all-to-all broadcast; we build directly on their Algorithm 3, replacing
 the broadcast with hop-by-hop relay over the routing tree. In all three cases, the
 communication model is fixed in advance (symmetric gossip or all-to-all);
-\merw{} instead derives a communication structure, the hub and tree, from the
+\merw instead derives a communication structure, the hub and tree, from the
 graph itself, and shows it is sufficient for the same class of decision rules.
 
 \paragraph{Eigenvector centrality and decentralized computation.}
@@ -145,7 +161,7 @@ In principle, computing the eigenvector centrality requires solving the
 eigenvalue problem associated with the graph $G$;
 \cite{jelasity2007asynchronous} give a gossip-based normalization for
 distributed power iteration that avoids a global all-reduce, which we use
-directly to compute $\psi$ without any agent ever knowing $N$.
+directly to compute the first eigenvector without any agent ever knowing $N$.
 
 \paragraph{Fault tolerance in tree-structured coordination.} The passive-backup
 pattern underlying \merwft{} is standard in distributed systems: OSPF's Backup
@@ -166,12 +182,12 @@ has been made fully distributed
 self-stabilizing version that recovers after a fault. These methods are exact,
 but the cost is structural: computing the absolute center requires every node
 to hold all-pairs shortest-path information, i.e., full topological knowledge
-of $G$, not just its own neighborhood: $O(n)$ per-node distance entries at
-minimum, and $O(n^2)$ total network state \citep{bui2013distributed}. A
+of $G$, not just its own neighborhood: $O(N)$ per-node distance entries at
+minimum, and $O(N^2)$ total network state \citep{bui2013distributed}. A
 permanent node failure changes the graph itself, so the center may move, and
 the construction (or, in the self-stabilizing variant, a full reconvergence
 over the network) must run again, with no bounded, localized way to react to a
-single failure. \merw{} makes the opposite trade-off: the hub is chosen from
+single failure. \merw makes the opposite trade-off: the hub is chosen from
 local gossip alone, with no agent ever storing distances to more than its
 immediate neighbors, and \merwft{} recovers from a single hub failure in a
 number of rounds bounded by the tree depth $D$, using a precomputed backup,
@@ -181,7 +197,7 @@ quantifies what this costs in tree diameter.
 \section{EigenTree: The Protocol}
 
 \subsection{Hub Emergence and Routing}
-\merw{} is based on the eigenvector centrality; we describe here how we obtain
+\merw is based on the eigenvector centrality; we describe here how we obtain
 it in a purely decentralized way, and how we use it to construct a routing tree
 that spans the graph $G$.
 
@@ -265,7 +281,7 @@ participation in long paths throughout the graph, not just how many neighbors
 it has.
 
 MERW's stationary distribution is proportional to the eigenvector centrality,
-and this is the link between MERW and \merw{}. Computing the eigenvector
+and this is the link between MERW and \merw. Computing the eigenvector
 centrality allows one to identify the hub node $h\in G$ which is most
 frequently traversed.
 
@@ -280,10 +296,10 @@ Let $\mathcal{A}$ be any decision rule whose output at each step depends only on
 Fix any decision round $r$. By Proposition~\ref{prop:aggbcast}, after $D$ rounds the hub holds $B = \sum_{i\in V} b_i$ exactly, not an approximation, since every node's contribution is included by the uplink termination argument. Because $\mathcal{A}$'s decision at round $r$ depends only on $B$, the hub computes exactly the action a centralized instance of $\mathcal{A}$ would compute given the same per-agent contributions. By Proposition~\ref{prop:aggbcast} again, within a further $D$ rounds every agent holds the hub's decision and has derived its own depth $d_i$ from the hop count on this broadcast, so all agents can identify when the current cycle ends and begin the next round's contribution simultaneously, regardless of their depth in $\mathcal{T}$. Hence the sequence of aggregates and decisions seen across the whole run is identical, round for round, to what a centralized instance of $\mathcal{A}$ would see given the same sequence of per-agent contributions; the only difference is the $2D$ rounds of communication latency inserted between successive decisions.
 \end{proof}
 
-\merw{} assumes a synchronous round structure throughout: every agent takes one action per discrete time step, and a step's outcome (a pull, a forwarded packet) is visible to its recipient at the start of the next step. This is what makes silence a reliable signal, both for max-flooding's termination and, in Section~\ref{sec:ft}, for detecting a failed neighbor. \merw{} is therefore a generic protocol, given as Algorithm~\ref{alg:merw-generic}: Initialization, then repeated cycles of Pull, Uplink, Hub decision, Downlink, parameterized by three application-specific hooks, $\textsc{Init}$, $\textsc{LocalPull}$, and $\textsc{HubDecide}$, that determine what each agent contributes locally and what the hub decides from the aggregate $B$. Any decentralized cooperative-learning task whose decision rule fits Theorem~\ref{thm:coordinator} can be run over the same emergent tree by supplying a different set of hooks. Table~\ref{tab:instantiations} instantiates them for regret minimization and best arm identification, detailed in the two subsections below.
+\merw assumes a synchronous round structure throughout: every agent takes one action per discrete time step, and a step's outcome (a pull, a forwarded packet) is visible to its recipient at the start of the next step. This is what makes silence a reliable signal, both for max-flooding's termination and, in Section~\ref{sec:ft}, for detecting a failed neighbor. \merw is therefore a generic protocol, given as Algorithm~\ref{alg:merw-generic}: Initialization, then repeated cycles of Pull, Uplink, Hub decision, Downlink, parameterized by three application-specific hooks, $\textsc{Init}$, $\textsc{LocalPull}$, and $\textsc{HubDecide}$, that determine what each agent contributes locally and what the hub decides from the aggregate $B$. Any decentralized cooperative-learning task whose decision rule fits Theorem~\ref{thm:coordinator} can be run over the same emergent tree by supplying a different set of hooks. Table~\ref{tab:instantiations} instantiates them for regret minimization and best arm identification, detailed in the two subsections below.
 
 \begin{algorithm}[tb]
-\caption{\merw{} (generic protocol)}
+\caption{\merw (generic protocol)}
 \label{alg:merw-generic}
 \begin{algorithmic}[1]
 \STATE \textbf{Require:} graph $G$; hooks $\textsc{Init}$, $\textsc{LocalPull}$, $\textsc{HubDecide}$; a stopping condition on $t$ or on a hub-computed flag $\mathrm{done}$
@@ -310,12 +326,13 @@ Fix any decision round $r$. By Proposition~\ref{prop:aggbcast}, after $D$ rounds
     \label{fig:merw_viz_er}
 \end{figure}
 
-\subsection{Cost of Not Using the Minimum Diameter Tree}
+% \subsection{Cost of Not Using the Minimum Diameter Tree}
+\subsection{\merw vs. Minimum Diameter Tree}
 \label{sec:mdst-gap}
 
-\merw{} roots its tree at $h^\star$, the highest-centrality node, not at the graph's absolute center, the root that would minimize tree depth and give a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. So the tree depth $D = \mathrm{ecc}_G(h^\star)$, which sets the $O(D)$ communication overhead of Theorem~\ref{thm:coordinator}, can exceed $D' = R(G)$, the depth an MDST would achieve. We bound this gap in two regimes, first an unrestricted worst case and then two conditions, one on degree and one on spectral expansion, under which the gap is small.
+\merw roots its tree at $h^\star$, the highest-centrality node, not at the graph's absolute center, the root that would minimize tree depth and give a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. So the tree depth $D = \mathrm{ecc}_G(h^\star)$, which sets the $O(D)$ communication overhead of Theorem~\ref{thm:coordinator}, can exceed $D' = R(G)$, the depth an MDST would achieve. We bound this gap in two regimes, first an unrestricted worst case and then two conditions, one on degree and one on spectral expansion, under which the gap is small.
 
-\paragraph{Worst case.} Take a graph formed by attaching a high-degree cluster to the end of a long path: $h^\star$ settles inside the cluster, since that is where centrality concentrates, while the true center sits near the path's midpoint. As the path grows, $D$ approaches $2D'$, matching the tight general bound $D' \geq D(G)/2$ that holds for \emph{any} choice of root \citep{hakimi1964}; \merw{}'s hub does no better than an arbitrary one here. This construction has a cut vertex on the path.
+\paragraph{Worst case.} Take a graph formed by attaching a high-degree cluster to the end of a long path: $h^\star$ settles inside the cluster, since that is where centrality concentrates, while the true center sits near the path's midpoint. As the path grows, $D$ approaches $2D'$, matching the tight general bound $D' \geq D(G)/2$ that holds for \emph{any} choice of root \citep{hakimi1964}; \merw's hub does no better than an arbitrary one here. This construction has a cut vertex on the path.
 
 The bound below needs $h^\star$ to have enough neighbors that any other node is reachable in a couple of hops, so we first show that being the highest-centrality node already guarantees a minimum degree, with no extra assumption on $G$.
 
@@ -333,7 +350,7 @@ Let $\delta_{\bar N}(h^\star) = \min_{u \notin \mathcal{N}_G(h^\star)\cup\{h^\st
 Take any $u \neq h^\star$ with $u \notin \mathcal{N}_G(h^\star)$; every neighbor of $h^\star$ already has $d(h^\star,\cdot)=1$, so it suffices to show $d(h^\star,u)\leq2$ for such $u$. Both $\mathcal{N}_G(h^\star)$ and $\mathcal{N}_G(u)$ are subsets of $V\setminus\{h^\star,u\}$, and since $\deg(u)\geq\delta_{\bar N}(h^\star)$, their sizes satisfy $|\mathcal{N}_G(h^\star)|+|\mathcal{N}_G(u)| \geq \deg(h^\star)+\delta_{\bar N}(h^\star) \geq n$ by the hypothesis. Since $|V\setminus\{h^\star,u\}|=n-2 < n$, the two neighbor sets cannot be disjoint, so some $w$ is a common neighbor, giving $d(h^\star,u)\leq2$ via $h^\star\text{-}w\text{-}u$.
 \end{proof}
 
-Since $D' \geq 1$ on any connected graph with more than one node, Theorem~\ref{thm:mdst-gap} says \merw{}'s tree is at most one hop deeper than the true MDST whenever this condition holds. By Proposition~\ref{prop:hubdeg} it is easier to satisfy the more concentrated $G$'s spectral radius $\lambda$ is, and it requires only $h^\star$ and the nodes outside its immediate neighborhood to be well-connected, not every node in $G$.
+Since $D' \geq 1$ on any connected graph with more than one node, Theorem~\ref{thm:mdst-gap} says \merw's tree is at most one hop deeper than the true MDST whenever this condition holds. By Proposition~\ref{prop:hubdeg} it is easier to satisfy the more concentrated $G$'s spectral radius $\lambda$ is, and it requires only $h^\star$ and the nodes outside its immediate neighborhood to be well-connected, not every node in $G$.
 
 \paragraph{Well-connected graphs.} Theorem~\ref{thm:mdst-gap}'s hypothesis is a strong density requirement. A weaker condition, the graph's algebraic connectivity $\lambda_2$ (the second-smallest Laplacian eigenvalue) bounded away from $0$, already bounds the gap logarithmically in $n$, with no density requirement on individual nodes.
 
@@ -349,7 +366,7 @@ Unlike Theorem~\ref{thm:mdst-gap}, this bound does not rely on $h^\star$'s own d
 
 Theorem~\ref{thm:mdst-gap} already yields a high-probability guarantee on random graphs with no new proof: on an Erd\H{o}s--R\'{e}nyi graph $G(n,p)$ with $p$ bounded above $1/2$ by a constant margin, every node's degree concentrates tightly around its mean $(n-1)p$, so $\deg(h^\star)+\delta_{\bar N}(h^\star)$ exceeds $n$ with probability approaching 1 as $n$ grows. So on dense enough Erd\H{o}s--R\'{e}nyi graphs, the difference between $D$ and $D'$ is, with high probability, negligible: at most one hop.
 
-\merw{} does not try to avoid the worst case directly: doing so would require the same all-pairs distance information that exact MDST construction depends on (Section~\ref{sec:related}), which is precisely the global knowledge \merw{} is designed to do without.
+\merw does not try to avoid the worst case directly: doing so would require the same all-pairs distance information that exact MDST construction depends on (Section~\ref{sec:related}), which is precisely the global knowledge \merw is designed to do without.
 
 \subsection{Instantiation: Regret Minimization}
 \label{sec:regret}
@@ -358,7 +375,7 @@ With $K$ arms of unknown means $\mu_1 \geq \cdots \geq \mu_K$ and sub-Gaussian r
 
 \begin{corollary}[Regret matches centralized UCB]
 \label{cor:regret}
-Under the \merw{} relay protocol, the leading term of the expected group cumulative regret matches a centralized UCB agent on $P$ total pulls, with $P = \Theta(NT/(2D+1))$.
+Under the \merw relay protocol, the leading term of the expected group cumulative regret matches a centralized UCB agent on $P$ total pulls, with $P = \Theta(NT/(2D+1))$.
 \end{corollary}
 
 \subsection{Instantiation: Best Arm Identification}
@@ -394,7 +411,7 @@ Downlink $m$ & aggregate $(\hat n,\hat s,P)$ & surviving set $S_r$ \\
 \section{Fault Tolerance}
 \label{sec:ft}
 
-A fully centralized coordinator has an unavoidable weakness: if the coordinator fails, the whole system fails with it, since every agent's information passes through that single point. \merw{}'s emergent hub inherits exactly this weakness by construction, since it is a single node running the decision rule on globally aggregated statistics, so decentralizing the search for a coordinator does not, by itself, remove the risk that centralizing coordination around it re-introduces. \merwft{} closes this gap: it renders the protocol robust to the failure of any single node, hub or not, so that the practical benefit of centralized-style coordination is not paid for with the fragility of an actual centralized system.
+A fully centralized coordinator has an unavoidable weakness: if the coordinator fails, the whole system fails with it, since every agent's information passes through that single point. \merw's emergent hub inherits exactly this weakness by construction, since it is a single node running the decision rule on globally aggregated statistics, so decentralizing the search for a coordinator does not, by itself, remove the risk that centralizing coordination around it re-introduces. \merwft{} closes this gap: it renders the protocol robust to the failure of any single node, hub or not, so that the practical benefit of centralized-style coordination is not paid for with the fragility of an actual centralized system.
 
 Every node in $\mathcal{T}$ is a potential failure point, and \merwft{} must account for the failure of \emph{any} node, not only the hub. The consequences are highly asymmetric, however. The hub alone runs the decision rule on globally aggregated statistics; if it fails permanently, no downlink is broadcast, no agent learns the outcome of the current round, and the entire coordination structure collapses. A non-hub node, by contrast, is a relay for one subtree: its failure disrupts only the agents below it, while the hub and the rest of the tree continue operating normally. We treat the two cases in turn, hub failure first as the more consequential one.
 
