@@ -13,6 +13,7 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{booktabs}
+\usepackage{todonotes}
 
 \newtheorem{proposition}{Proposition}
 \newtheorem{theorem}{Theorem}
@@ -71,44 +72,202 @@
 
 In cooperative multi-agent learning, no individual agent has access to the global state of the system, yet the best-performing strategy is usually the one available to a centralized decision maker with a full view of everyone's observations. This is the setting whenever $N$ agents connected by an undirected graph $G = (V, E)$ must repeatedly act and learn from feedback while exchanging only local messages with their graph neighbors. Existing approaches close the gap to centralized performance either by symmetric averaging, where every agent maintains its own estimate and no coordinator ever exists (e.g., Coop-UCB2 \citep{landgren2021distributed}), or by assuming a communication model rich enough that any agent can reach any other in one step (e.g., the all-to-all broadcast of Hillel et al.\ \citep{hillel2013distributed}). Both work, but neither asks whether a coordinator could arise from the graph itself, without being assumed into existence or requiring dense connectivity.
 
-\merw{} answers this question constructively: a coordinator \emph{emerges} from the graph structure, identified from purely local computation, with no agent ever seeing the global topology or knowing $N$ in advance. The key idea is that Maximal Entropy Random Walk (MERW) eigenvector centrality \citep{burda2009localization}, computed via a fully decentralized gossip protocol \citep{jelasity2007asynchronous}, identifies the structurally most central node in $G$. This node, the hub, organizes the rest of the network into a spanning routing tree via max-flooding, again using only local information. Once the tree is in place, the hub acts as a de-facto central coordinator: every agent routes its observations up toward the hub, which sees the globally aggregated picture and broadcasts its decisions back down. We prove that this emergent coordinator is statistically equivalent to a true centralized coordinator for any decision rule that depends only on globally aggregated per-agent statistics, at the cost of a bounded communication overhead determined by the tree's depth.
+\merw{} answers this question constructively: a coordinator \emph{emerges} from
+the graph structure, identified from purely local computation, with no agent
+ever seeing the global topology or knowing $N$ in advance. The key idea is that
+eigenvector centrality, computed via a fully decentralized gossip
+protocol \citep{jelasity2007asynchronous}, identifies the structurally most
+central node in $G$. One can then construct a routing tree spanning the graph
+via max-flooding, again only using local information.
+Once the tree is in place, the hub acts as a de-facto central coordinator:
+every agent routes its observations up toward the hub, which sees the globally
+aggregated picture and broadcasts its decisions back down. We prove that this
+emergent coordinator is statistically equivalent to a true centralized
+coordinator for any decision rule that depends only on globally aggregated
+per-agent statistics, at the cost of a bounded communication overhead
+determined by the tree's depth.
 
-This last property is what makes \merw{} a \emph{protocol} rather than a single algorithm: any decentralized cooperative-learning task whose decision rule fits this mold can be run over the same emergent hub-and-tree structure by supplying two application-specific rules, namely what each agent contributes locally and what the hub decides from the aggregate. We instantiate both rules for two standard cooperative multi-armed bandit objectives, \emph{regret minimization} and \emph{best arm identification} (BAI), and show in both cases that the emergent coordinator recovers centralized-level performance.
+This last property is what makes \merw{} a \emph{protocol} rather than a single
+algorithm: any decentralized cooperative-learning task whose decision rule fits
+this mold\todo{Which\\mold?} can be run over the same emergent hub-and-tree structure by supplying
+two application-specific rules, namely 1) what each agent contributes locally and
+2) what the hub decides from the aggregate. We instantiate both rules for two
+standard cooperative multi-armed bandit objectives, \emph{regret minimization}
+and \emph{best arm identification} (BAI), and show in both cases that the
+emergent coordinator recovers centralized-level performance.
 
-The emergent-coordinator design has one structural weakness: the hub is a single point of failure, and more generally, any node's failure disrupts the part of the tree that routes through it. Hub failure is the more consequential case, since it can stall the entire network; we show it can be tolerated with zero communication overhead during normal operation, by designating the hub's most central direct child as a passive backup that already mirrors the hub's state through the ordinary downlink broadcast. Non-hub failure, which only disrupts a subtree, is repaired even more cheaply, via precomputed swap edges.
+The emergent-coordinator design has one structural weakness: the hub is a
+single point of failure, and more generally, any node's failure disrupts the
+part of the tree that routes through it. Hub failure is the more consequential
+case, since it can stall the entire network; we show it can be tolerated with
+zero communication overhead during normal operation, by designating, among the
+hub's children, the most central one as a passive backup. This node already
+mirrors the hub's state through the ordinary downlink broadcast. Non-hub
+failure, which only disrupts a subtree, is repaired even more cheaply, via
+precomputed swap edges.
 
-\paragraph{Contributions.} (1) A fully decentralized protocol for \emph{inducing} centrality: the hub and tree emerge from local MERW computations, requiring no privileged node, no global communication, and no prior knowledge of $N$ or the graph structure. (2) A proof that this emergent coordinator is statistically sufficient for any decision rule depending only on globally aggregated statistics, instantiated for regret minimization and best arm identification, both matching centralized performance up to an $O(D)$ communication overhead per round, where $D$ is the depth of the induced tree. (3) \merwft, a passive-backup extension tolerating permanent failure of any node, hub or non-hub, at zero or near-zero steady-state cost.
+\paragraph{Contributions.} (1) A fully decentralized protocol for
+\emph{inducing} centrality: the hub and tree emerge from local computations,
+requiring no privileged node, no global communication, and no prior knowledge
+of $N$ or the graph structure. (2) A proof that this emergent coordinator is
+statistically sufficient for any decision rule depending only on globally
+aggregated statistics, instantiated for regret minimization and best arm
+identification, both matching centralized performance up to an $O(D)$
+communication overhead per round, where $D$ is the depth of the induced tree.
+(3) \merwft, a passive-backup extension tolerating permanent failure of any
+node, hub or non-hub, at zero or near-zero steady-state cost.
 
 \section{Related Work}
 \label{sec:related}
 
-\paragraph{Cooperative multi-agent bandits.} Coop-UCB2 \citep{landgren2021distributed} uses doubly stochastic consensus weights to diffuse observations across the graph; every agent plays an equivalent role and no coordinator is assumed. Mart\'inez-Rubio et al.\ \citep{martinez2019decentralized} introduce the total-pull clock we adopt to index UCB confidence intervals by actual observations rather than wall-clock rounds. Hillel et al.\ \citep{hillel2013distributed} study cooperative BAI under all-to-all broadcast; we build directly on their Algorithm 3, replacing the broadcast with hop-by-hop relay over the MERW tree. In all three cases, the communication model is fixed in advance (symmetric gossip or all-to-all); \merw{} instead derives a communication structure, the hub and tree, from the graph itself, and shows it is sufficient for the same class of decision rules.
+\paragraph{Cooperative multi-agent bandits.} Coop-UCB2
+\citep{landgren2021distributed} uses doubly stochastic consensus weights to
+diffuse observations across the graph; every agent plays an equivalent role and
+no coordinator is assumed. % Mart\'inez-Rubio et al.\
+\cite{martinez2019decentralized} introduce the total-pull clock we adopt to
+index UCB confidence intervals by actual observations rather than wall-clock
+rounds.
+% Hillel et al.\ 
+\cite{hillel2013distributed} study cooperative BAI
+under all-to-all broadcast; we build directly on their Algorithm 3, replacing
+the broadcast with hop-by-hop relay over the routing tree. In all three cases, the
+communication model is fixed in advance (symmetric gossip or all-to-all);
+\merw{} instead derives a communication structure, the hub and tree, from the
+graph itself, and shows it is sufficient for the same class of decision rules.
 
-\paragraph{Eigenvector centrality and decentralized computation.} The Maximal Entropy Random Walk \citep{burda2009localization} provides an information-theoretic grounding for eigenvector centrality: $\psi_i$ is the unique centrality consistent with assigning equal probability to all paths of equal length, and $\psi_i^2$ concentrates sharply on a small set of nodes in heterogeneous graphs. Jelasity et al.\ \citep{jelasity2007asynchronous} give a gossip-based normalization for distributed power iteration that avoids a global all-reduce, which we use directly to compute $\psi$ without any agent ever knowing $N$.
+\paragraph{Eigenvector centrality and decentralized computation.}
+Eigenvector centrality can be studied in the context of Maximal Entropy Random
+Walk \citep{burda2009localization}, where it appears in the associated
+stationary distribution. This framing gives an information-theoretic meaning
+for eigenvector centrality, and it is on the basis of this argument that we
+justify its usage (see Sec.~\ref{sec:merw}).
+In principle, computing the eigenvector centrality requires solving the
+eigenvalue problem associated with the graph $G$;
+\cite{jelasity2007asynchronous} give a gossip-based normalization for
+distributed power iteration that avoids a global all-reduce, which we use
+directly to compute $\psi$ without any agent ever knowing $N$.
 
-\paragraph{Fault tolerance in tree-structured coordination.} The passive-backup pattern underlying \merwft{} is standard in distributed systems: OSPF's Backup Designated Router \citep{rfc2328} and RSTP's Alternate Port \citep{ieee8021w} both pre-identify a successor that promotes itself locally upon primary failure. Lamport, Malkhi and Zhou \citep{lamport2009vertical} formalize passive replication as a special case of Paxos, establishing that a mirroring backup is at most one synchronization round stale; \merwft{} applies this pattern to the aggregation-tree setting, and additionally handles non-hub failure via the swap-edge framework of Nardelli et al.\ \citep{nardelli2003}.
+\paragraph{Fault tolerance in tree-structured coordination.} The passive-backup
+pattern underlying \merwft{} is standard in distributed systems: OSPF's Backup
+Designated Router \citep{rfc2328} and RSTP's Alternate Port \citep{ieee8021w}
+both pre-identify a successor that promotes itself locally upon primary
+failure. \cite{lamport2009vertical} formalize passive replication as a special
+case of Paxos, establishing that a mirroring backup is at most one
+synchronization round stale; \merwft{} applies this pattern to the
+aggregation-tree setting, and additionally handles non-hub failure via the
+swap-edge framework of \cite{nardelli2003}.
 
-\paragraph{Minimum-diameter spanning trees.} Choosing the coordinator to directly minimize the routing tree's diameter is a solved problem: the optimal root is the graph's absolute center, and a shortest-path tree rooted there is a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. This has been made fully distributed \citep{bui2013distributed,butelle1995selfstabilizing}, including a self-stabilizing version that recovers after a fault. These methods are exact, but the cost is structural: computing the absolute center requires every node to hold all-pairs shortest-path information, i.e., full topological knowledge of $G$, not just its own neighborhood: $O(n)$ per-node distance entries at minimum, and $O(n^2)$ total network state \citep{bui2013distributed}. A permanent node failure changes the graph itself, so the center may move, and the construction (or, in the self-stabilizing variant, a full reconvergence over the network) must run again, with no bounded, localized way to react to a single failure. \merw{} makes the opposite trade-off: the hub is chosen from local gossip alone, with no agent ever storing distances to more than its immediate neighbors, and \merwft{} recovers from a single hub failure in a number of rounds bounded by the tree depth $D$, using a precomputed backup, rather than reconverging the whole network. Section~\ref{sec:mdst-gap} quantifies what this costs in tree diameter.
+\paragraph{Minimum-diameter spanning trees.} Choosing the coordinator to
+directly minimize the routing tree's diameter is a solved problem: the optimal
+root is the graph's absolute center, and a shortest-path tree rooted there is a
+minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. This
+has been made fully distributed
+\citep{bui2013distributed,butelle1995selfstabilizing}, including a
+self-stabilizing version that recovers after a fault. These methods are exact,
+but the cost is structural: computing the absolute center requires every node
+to hold all-pairs shortest-path information, i.e., full topological knowledge
+of $G$, not just its own neighborhood: $O(n)$ per-node distance entries at
+minimum, and $O(n^2)$ total network state \citep{bui2013distributed}. A
+permanent node failure changes the graph itself, so the center may move, and
+the construction (or, in the self-stabilizing variant, a full reconvergence
+over the network) must run again, with no bounded, localized way to react to a
+single failure. \merw{} makes the opposite trade-off: the hub is chosen from
+local gossip alone, with no agent ever storing distances to more than its
+immediate neighbors, and \merwft{} recovers from a single hub failure in a
+number of rounds bounded by the tree depth $D$, using a precomputed backup,
+rather than reconverging the whole network. Section~\ref{sec:mdst-gap}
+quantifies what this costs in tree diameter.
 
 \section{EigenTree: The Protocol}
-\label{sec:merw}
 
 \subsection{Hub Emergence and Routing}
+\merw{} is based on the eigenvector centrality; we describe here how we obtain
+it in a purely decentralized way, and how we use it to construct a routing tree
+that spans the graph $G$.
 
-The Maximal Entropy Random Walk (MERW) is the walk on $G$ whose transition probabilities make every path of a given length between two fixed nodes equally likely \citep{burda2009localization}, unlike the standard random walk, which only weighs each single step by degree and has no notion of the paths it is part of. Because MERW weighs entire paths equally, a node's stationary probability under MERW reflects how many long paths of all lengths run through it, not just how many neighbors it has. On a graph with irregular structure, a small number of nodes sit on disproportionately many such paths, and MERW's stationary distribution concentrates almost all of its mass on exactly that handful of nodes, with every other node close to zero \citep{burda2009localization}. This sharp concentration, not just high degree, is what identifies a natural hub: a node that is central across paths of every length, agreed upon by any agent that computes the same quantity.
+Formally, let $A \in \{0,1\}^{N \times N}$ be the adjacency matrix of $G$. By
+the Perron--Frobenius theorem \citep{hornjohnson2013}, $A$ has a unique
+positive leading eigenvalue $\lambda_1$ with strictly positive eigenvector
+$\psi$ such that $A\psi = \lambda_1 \psi$ and $\|\psi\|_2 = 1$.
 
-Formally, let $A \in \{0,1\}^{N \times N}$ be the adjacency matrix of $G$. By the Perron--Frobenius theorem \citep{hornjohnson2013}, $A$ has a unique positive leading eigenvalue $\lambda_1$ with strictly positive eigenvector $\psi$, $\|\psi\|_2 = 1$; MERW's stationary distribution is $\pi_i = \psi_i^2$. We use $\psi_i$ as node $i$'s centrality score.
+No single agent has access to $A$, so $\psi$ is computed by the distributed
+power iteration of \citep{jelasity2007asynchronous}. Each agent $i$ keeps a
+local scalar $w_i$, initialized to 1, and repeats: (1) collect $w_j$ from every
+neighbor and form the unnormalized update $\tilde w_i = \sum_{j\sim i} w_j$;
+(2) compute the local log-growth rate $r_i = \log(\tilde w_i/w_i)$; (3) average
+$r_i$ with random neighbors for $O(\log N)$ gossip rounds, so that every $r_i$
+converges to the same network-wide estimate of $\log\lambda_1$ without any node
+ever summing over all of $N$; (4) normalize locally, $w_i \leftarrow \tilde
+w_i/\exp(r_i)$. This gossip step replaces the single global $\ell_2$-norm
+renormalization an ordinary (non-distributed) power iteration would need, at
+the cost of the extra gossip rounds. Since only the \emph{ratio}
+$\psi_j/\psi_i$ is needed for routing (agent $i$ simply checks which neighbor's
+value is larger), the common unknown scale $\tilde\psi_i \approx c\cdot\psi_i$
+left behind by this normalization is never resolved and never needs to be: no
+agent ever learns $N$ or $c$.
 
-No single agent has access to $A$, so $\psi$ is computed by the distributed power iteration of \citep{jelasity2007asynchronous}. Each agent $i$ keeps a local scalar $w_i$, initialized to 1, and repeats: (1) collect $w_j$ from every neighbor and form the unnormalized update $\tilde w_i = \sum_{j\sim i} w_j$; (2) compute the local log-growth rate $r_i = \log(\tilde w_i/w_i)$; (3) average $r_i$ with random neighbors for $O(\log N)$ gossip rounds, so that every $r_i$ converges to the same network-wide estimate of $\log\lambda_1$ without any node ever summing over all of $N$; (4) normalize locally, $w_i \leftarrow \tilde w_i/\exp(r_i)$. This gossip step replaces the single global $\ell_2$-norm renormalization an ordinary (non-distributed) power iteration would need, at the cost of the extra gossip rounds. Since only the \emph{ratio} $\psi_j/\psi_i$ is needed for routing (agent $i$ simply checks which neighbor's value is larger), the common unknown scale $\tilde\psi_i \approx c\cdot\psi_i$ left behind by this normalization is never resolved and never needs to be: no agent ever learns $N$ or $c$.
+After power iteration, a short \emph{max-flooding} phase merges any local
+maxima of $\tilde\psi$ into a single spanning tree. Each agent $i$ keeps a
+flooded value $m_i$, initialized to $\tilde\psi_i$, and a pointer
+$\mathrm{via}_i$ initialized to itself. Every round, $i$ broadcasts $m_i$ to
+its neighbors; if some neighbor $j$ reports $m_j > m_i$, $i$ sets $m_i
+\leftarrow m_j$ and $\mathrm{via}_i \leftarrow j$. Once a round passes in which
+no agent updates its value, the flood has converged, purely a local
+observation, with no agent needing to know $\mathrm{diam}(G)$ in advance. At
+convergence, $m_i$ equals the global maximum $\tilde\psi_{h^\star}$ everywhere,
+and $\mathrm{via}_i$ points one step closer to $h^\star$; any node whose own
+$\tilde\psi_i$ was a local but not the global maximum re-routes toward
+$\mathrm{via}_i$, while $h^\star$ itself, whose value never has a better
+neighbor, keeps no parent and becomes the root. The result is a single directed
+spanning tree $\mathcal{T}$ rooted at $h^\star = \arg\max_i \tilde\psi_i$,
+converging in at most $\mathrm{diam}(G)$ rounds. Immediately afterward, each
+node $i$ knows only its own parent $\mathrm{par}(i)$; its children, its depth
+$d_i$, and the tree height $D$ are all discovered incrementally during the
+protocol's first cycle below, not known in advance.
 
-After power iteration, a short \emph{max-flooding} phase merges any local maxima of $\tilde\psi$ into a single spanning tree. Each agent $i$ keeps a flooded value $m_i$, initialized to $\tilde\psi_i$, and a pointer $\mathrm{via}_i$ initialized to itself. Every round, $i$ broadcasts $m_i$ to its neighbors; if some neighbor $j$ reports $m_j > m_i$, $i$ sets $m_i \leftarrow m_j$ and $\mathrm{via}_i \leftarrow j$. Once a round passes in which no agent updates its value, the flood has converged, purely a local observation, with no agent needing to know $\mathrm{diam}(G)$ in advance. At convergence, $m_i$ equals the global maximum $\tilde\psi_{h^\star}$ everywhere, and $\mathrm{via}_i$ points one step closer to $h^\star$; any node whose own $\tilde\psi_i$ was a local but not the global maximum re-routes toward $\mathrm{via}_i$, while $h^\star$ itself, whose value never has a better neighbor, keeps no parent and becomes the root. The result is a single directed spanning tree $\mathcal{T}$ rooted at $h^\star = \arg\max_i \tilde\psi_i$, converging in at most $\mathrm{diam}(G)$ rounds. Immediately afterward, each node $i$ knows only its own parent $\mathrm{par}(i)$; its children, its depth $d_i$, and the tree height $D$ are all discovered incrementally during the protocol's first cycle below, not known in advance.
-
-Complete proofs of every theorem, proposition, and corollary in this paper are given in the supplementary material, using matching notation and statement numbering; we give the proof of Theorem~\ref{thm:coordinator} here as well, since it is the paper's central claim.
+Complete proofs of every theorem, proposition, and corollary in this paper are
+given in the supplementary material, using matching notation and statement
+numbering; we give the proof of Theorem~\ref{thm:coordinator} here as well,
+since it is the paper's central claim.
 
 \begin{proposition}[Centralized aggregation and broadcast via routing]
 \label{prop:aggbcast}
 If each node $i$ holds a scalar $x_i$ and propagates it toward $h^\star$ one hop per round (each intermediate node forwarding the sum received), the hub holds $\sum_i x_i$ after $D$ rounds, where $D$ is the tree height. Symmetrically, a value broadcast from $h^\star$ one hop per round reaches every node after $D$ rounds. Neither direction requires any node to know $D$ in advance: the uplink terminates when the hub observes a round with no incoming packets, and each node infers its own depth $d_i$ from the hop count carried on the first downlink it receives.
 \end{proposition}
+
+\subsection{Motivation for eigenvector centrality}
+\todo{trash title}
+\label{sec:merw}
+
+We provide here a heuristic for choosing eigenvector centrality as our guiding metric.
+
+In a federated setup, nodes share their states and perform updates. One can
+think of the state information to be shared as a ``packet'' that undergoes a
+random walk on the graph. Let us consider two nodes $i,j \in G$, with a packet
+originating from $i$ and reaching $j$. For a path length $L \geq
+\mathrm{dist}_G(i, j)$, there are generally many distinct paths joining $i$ and
+$j$. We assume there is no reason for one specific path to be favored compared
+to another: all admissible paths of a certain length $L$ which connect $i$ and
+$j$ are thus equally likely. Crucially, this condition is \emph{non-local};
+while an unbiased random walk prescribes all neighbors to be equally likely,
+this process considers all long paths. The question then becomes: which node
+$h\in G$ is most frequently visited under this path ensemble? That node will be
+involved in the largest portion of message exchanges, and thus be a natural
+candidate to be a hub.
+
+The framing we just described is a Maximal Entropy Random Walk (MERW) on $G$
+\citep{burda2009localization}. The MERW is the walk on $G$ whose transition
+probabilities make every path of a given length between two fixed nodes equally
+likely, unlike the standard random walk, which only weighs each single step by
+degree and has no notion of the paths it is part of. Because MERW weighs entire
+paths equally, a node's stationary probability under MERW reflects its
+participation in long paths throughout the graph, not just how many neighbors
+it has.
+
+MERW's stationary distribution is proportional to the eigenvector centrality,
+and this is the link between MERW and \merw{}. Computing the eigenvector
+centrality allows one to identify the hub node $h\in G$ which is most
+frequently traversed.
 
 \subsection{Coordinator Sufficiency}
 
