@@ -1111,48 +1111,45 @@ def load_regret_csv(graph_type, N, K, T):
 
 
 def plot_regret(results, T, N, K, graph_type, n_runs):
-    """Render the group/hub/regret-vs-pulls figure from precomputed results."""
+    """Render the group regret and regret-vs-pulls figure from precomputed results."""
     ts = np.arange(1, T + 1)
     info = f"$N={N}$, $K={K}$, $T={T}$, {n_runs} runs"
 
-    fig, axes = plt.subplots(1, 3, figsize=(20, 5))
+    fig, axes = plt.subplots(2, 1, figsize=(6, 7.5))
 
     max_common_pulls = min(results[n][4][-1] for n in ALGO_NAMES if n in results)
     pull_axis = np.linspace(0, max_common_pulls, 500)
 
+    handles, labels = [], []
     for name, (color, ls, label) in STYLES.items():
         if name not in results:
             continue
         mean_g, std_g, mean_h, std_h, mean_cp = results[name]
-        axes[0].plot(ts, mean_g, label=label, color=color, linestyle=ls, linewidth=1.8)
+        line, = axes[0].plot(ts, mean_g, label=label, color=color, linestyle=ls, linewidth=2.2)
         axes[0].fill_between(ts, mean_g - std_g, mean_g + std_g, color=color, alpha=0.15)
-        axes[1].plot(ts, mean_h, label=label, color=color, linestyle=ls, linewidth=1.8)
-        axes[1].fill_between(ts, mean_h - std_h, mean_h + std_h, color=color, alpha=0.15)
         reg_vs_pulls = np.interp(pull_axis, mean_cp, mean_g)
         std_vs_pulls = np.interp(pull_axis, mean_cp, std_g)
-        axes[2].plot(pull_axis, reg_vs_pulls, label=label, color=color, linestyle=ls, linewidth=1.8)
-        axes[2].fill_between(pull_axis, reg_vs_pulls - std_vs_pulls,
+        axes[1].plot(pull_axis, reg_vs_pulls, label=label, color=color, linestyle=ls, linewidth=2.2)
+        axes[1].fill_between(pull_axis, reg_vs_pulls - std_vs_pulls,
                              reg_vs_pulls + std_vs_pulls, color=color, alpha=0.15)
+        handles.append(line)
+        labels.append(label)
 
-    axes[0].set_xlabel("Round $t$")
-    axes[0].set_ylabel("Group cumulative regret $\\sum_i R_i(t)$")
-    axes[0].set_title(f"Group regret — {graph_type.upper()} graph\n{info}")
-    axes[0].legend(fontsize=9)
+    axes[0].set_xlabel("Round $t$", fontsize=15)
+    axes[0].set_ylabel("Group cumulative regret $\\sum_i R_i(t)$", fontsize=15)
+    axes[0].set_title(f"Group regret — {graph_type.upper()} graph\n{info}", fontsize=16)
+    axes[0].tick_params(labelsize=13)
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].set_xlabel("Round $t$")
-    axes[1].set_ylabel("Hub cumulative regret $R_{{i^\\star}}(t)$")
-    axes[1].set_title(f"Hub regret — {graph_type.upper()} graph\n{info}")
-    axes[1].legend(fontsize=9)
+    axes[1].set_xlabel("Total arm pulls (all agents combined)", fontsize=15)
+    axes[1].set_ylabel("Group cumulative regret $\\sum_i R_i(t)$", fontsize=15)
+    axes[1].set_title(f"Group regret vs.\\ total pulls\n{info}", fontsize=16)
+    axes[1].tick_params(labelsize=13)
     axes[1].grid(True, alpha=0.3)
 
-    axes[2].set_xlabel("Total arm pulls (all agents combined)")
-    axes[2].set_ylabel("Group cumulative regret $\\sum_i R_i(t)$")
-    axes[2].set_title(f"Group regret vs.\\ total pulls\n{info}")
-    axes[2].legend(fontsize=9)
-    axes[2].grid(True, alpha=0.3)
-
-    fig.tight_layout()
+    fig.legend(handles, labels, loc="lower center", ncol=len(labels), fontsize=15,
+               bbox_to_anchor=(0.5, 0.0))
+    fig.tight_layout(rect=[0, 0.06, 1, 1])
     out1 = REGRET_DIR / f"relay_regret_{graph_type}_N{N}_K{K}_T{T}.pdf"
     fig.savefig(out1)
     plt.close(fig)

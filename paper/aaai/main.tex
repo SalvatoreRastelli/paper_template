@@ -458,23 +458,24 @@ This composes with repeated hub failure: if $v$ happens to reconnect through the
 
 We evaluate both instantiations on Erd\H{o}s--R\'{e}nyi (ER) graphs, where centrality is spread across several nodes but still identifies a clear hub (Figure~\ref{fig:merw_viz_er}).
 
-For regret minimization ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs; Figure~\ref{fig:regret_er}), the hub, identified without any central authority, coordinates the network to logarithmic group regret while non-hub agents accumulate no regret during communication rounds.
+For regret minimization ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs; Figure~\ref{fig:regret_er}), the hub, identified without any central authority, coordinates the network to logarithmic group regret while non-hub agents accumulate no regret during communication rounds. For best arm identification ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$), Figure~\ref{fig:bai_er} compares total arm pulls against Hillel's centralized algorithm as a function of $N$, using the same graph and MERW-identified hub for both.
 
-\begin{figure}[tb]
+\begin{figure*}[t]
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
-    \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Left}: group regret vs.\ round. \emph{Center}: hub regret vs.\ round. \emph{Right}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
-    \label{fig:regret_er}
-\end{figure}
-
-For best arm identification ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$), Figure~\ref{fig:bai_er} compares total arm pulls against Hillel's centralized algorithm as a function of $N$, using the same graph and MERW-identified hub for both.
-
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=0.95\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
-    \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Left}: total arm pulls vs.\ $N$. \emph{Right}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
-    \label{fig:bai_er}
-\end{figure}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=0.85\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
+        \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Top}: group regret vs.\ round. \emph{Bottom}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
+        \label{fig:regret_er}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=0.85\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
+        \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Top}: total arm pulls vs.\ $N$. \emph{Bottom}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
+        \label{fig:bai_er}
+    \end{minipage}
+\end{figure*}
 
 \FloatBarrier
 
