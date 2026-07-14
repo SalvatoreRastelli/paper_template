@@ -350,13 +350,6 @@ detailed in the two subsections below.
 \end{algorithmic}
 \end{algorithm}
 
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=0.95\columnwidth]{results/MERW_visualization/merw_tree_er_N20_p0.5.pdf}
-    \caption{Eigenvector centrality and routing tree on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$). \emph{Left}: undirected graph, nodes colored by $\psi_i/\psi_{\max}$. \emph{Center}: routing subtree overlaid on the graph, hub ringed in gold. \emph{Right}: induced directed tree, hierarchical layout, arrows child $\to$ parent.}
-    \label{fig:merw_viz_er}
-\end{figure}
-
 \subsection{\merw vs. Minimum Diameter Tree}
 \label{sec:mdst-gap}
 
@@ -442,7 +435,7 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
 \end{corollary}
 
 
-\begin{table}[htbp]
+\begin{table}[tbp]
 \caption{Function behavior across different algorithm instantiations.}
 \label{tab:instantiations}
 \small
@@ -470,45 +463,40 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
 \section{Fault Tolerance}
 \label{sec:ft}
 
-A centralized coordinator has one obvious weakness: if it fails, the system
-fails with it, since every agent's information passes through that single
-point. The \merw hub is a single node running the decision rule on globally
-aggregated statistics, so it carries the same weakness. \merwft removes it:
-any single node can fail, hub or not, without the network losing its ability
-to coordinate.
-
-Take any node in $\mathcal{T}$. If it fails, \merwft must handle it, and the
-hub and a non-hub node fail very differently. The hub alone holds the
-decision rule and the aggregated statistics; lose it, and no downlink goes
-out, no agent learns the round's outcome, and the whole coordination
-structure stops. A non-hub node only relays one subtree; lose it, and only
-the agents below it are affected, while the hub and the rest of the tree
-keep running. We cover hub failure first, since it is the more consequential
-case.
+A centralized coordinator like the one identified by \merw has one obvious
+weakness: if it fails, the system fails with it, since every agent's
+information passes through that single point. We describe a fault-tolerant
+variant, \merwft, under which any single node can fail, but the routing tree
+$\mathcal{T}$ can adapt without requiring additional computation. \merwft is
+fault tolerant with respect to both hub and non-hub failure, with only slight
+differences between the two cases, as described below.
 
 \subsection{Hub Failure}
 
 \merwft tolerates permanent hub failure at no extra cost during normal
-operation. The hub's direct children already receive every downlink
-broadcast, so they already hold a copy of the hub's global state. We use
-this: the child with the highest eigenvector centrality, $b^\star =
-\arg\max_{j \in \mathrm{ch}(h^\star)} \tilde\psi_j$, becomes the backup. The
+operation. The hub's direct children already receive every downlink broadcast,
+so they already hold a copy of the hub's global state. Consequently, the child
+with the highest eigenvector centrality, $b^\star = \arg\max_{j \in
+\mathrm{ch}(h^\star)} \tilde\psi_j$, is selected as the backup hub. The current
 hub announces this choice once, in the first downlink after it learns its
 children.
 
 \begin{proposition}[Backup staleness]
 \label{prop:staleness}
-At the end of any cycle, $b^\star$'s stored state equals the hub's state after the hub's own pull that cycle. If the hub fails during the next cycle, the backup's state is at most one full cycle stale.
+At the end of any cycle, $b^\star$'s stored state equals the hub's state after
+	the hub's own pull that cycle. If the hub fails during the next cycle, the
+	backup's state is at most one full cycle stale.
 \end{proposition}
 
+\todo{new tree height?}
 $b^\star$ detects hub silence by timeout, then does four things. First, it
-self-promotes: it takes the root role, using its own stored state. Second,
-it floods a promotion message over graph edges, not tree edges, since
+self-promotes: it takes the root role, using its own stored state. Second, it
+floods a promotion message over \emph{graph} edges, not tree edges, since
 $b^\star$ shares no tree edge with its former siblings; this tells them to
 re-route through $b^\star$. Third, it recomputes and broadcasts the new tree
 height $D_{\mathrm{new}}$. Fourth, it resumes the protocol right away. This
-only works if the graph is 2-connected: that is what guarantees a former
-sibling still has a path to $b^\star$ once the hub is gone.
+protocol only works if the graph is 2-connected: that is what guarantees a
+former sibling still has a path to $b^\star$ once the hub is gone.
 
 \begin{proposition}[Density implies 2-connectivity]
 \label{prop:dense-2conn}
@@ -587,9 +575,9 @@ not any particular identity for $j$.
 \section{Experiments}
 \label{sec:experiments}
 
-We evaluate both instantiations on Erd\H{o}s--R\'{e}nyi (ER) graphs. Here
-eigenvector centrality is spread across several nodes, but it still
-identifies a clear hub (Figure~\ref{fig:merw_viz_er}).
+We evaluate both instantiations of \merw on Erd\H{o}s--R\'{e}nyi (ER) graphs.
+Here eigenvector centrality is spread across several nodes, but it still
+identifies a clear hub.
 
 For regret minimization ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs;
 Figure~\ref{fig:regret_er}), the hub, identified without any central authority,
@@ -597,7 +585,7 @@ coordinates the network to logarithmic group regret while non-hub agents
 accumulate no regret during communication rounds. For best arm identification
 ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$), Figure~\ref{fig:bai_er}
 compares total arm pulls against Hillel's centralized algorithm as a function
-of $N$, using the same graph and MERW-identified hub for both.
+of $N$, using the same graph and hub for both.
 
 \begin{figure*}[t]
     \centering
@@ -616,30 +604,19 @@ of $N$, using the same graph and MERW-identified hub for both.
     \end{minipage}
 \end{figure*}
 
-% \FloatBarrier
-
 To test the failover mechanism of Section~\ref{sec:ft} directly, we run
 \merwft on an ER graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) and kill the hub
 at $t=500,1000,1500$. Each time, the backup promotes itself and the network
 recovers. Figure~\ref{fig:ft_regret} shows the resulting group regret: every
 failure is followed by a recovery within a handful of rounds, and the
 regret curve afterward grows at the same rate as before the failure, with
-no lasting penalty. Figure~\ref{fig:ft_trees} shows the induced routing tree
-on the underlying graph right after each failure. The backup correctly
-re-roots the tree and brings back every former sibling of the failed hub.
+no lasting penalty. 
 
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T2000_at500-1000-1500.pdf}
     \caption{Group regret for \merwft on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) with the hub killed at $t=500,1000,1500$. Dashed lines mark failures, dotted lines mark recovery. All three failures are recovered from.}
     \label{fig:ft_regret}
-\end{figure}
-
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_trees_er_N20_K10_T2000_at500-1000-1500.pdf}
-    \caption{Underlying graph and induced routing tree: initial, and immediately after each of the three hub failures. Faded edges are non-tree graph edges; arrows point from child to parent; dead nodes are shown in gray.}
-    \label{fig:ft_trees}
 \end{figure}
 
 \section{Discussion}
