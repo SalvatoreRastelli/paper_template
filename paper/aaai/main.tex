@@ -500,53 +500,70 @@ thus rebuild a new routing tree that spans the surviving graph $G\setminus v$.
 \subsection{Node Removal as a Perturbation}
 \label{sec:perturbation}
 
-Removing a node $v$ removes a row and column $v$ of the adjacency matrix. Since
-$A$ has no self-loops, for $e_v$ the indicator vector of node $v$, the pruned adjacency is
+Removing a node $v$ deletes row and column $v$ of the adjacency matrix:
 \[
 	\tilde A = A + E, \qquad E = -\bigl(A e_v e_v^\top + e_v e_v^\top A\bigr),
 \]
-a symmetric perturbation of rank at most $2$.
-The eigenvector centrality of the perturbed graph, $\tilde\psi$ can be computed via
-distributed power iteration on $\tilde A$, much like it was for the unperturbed
-graph: neighbors of the dead node will stop including it in their update
-$\tilde w_i = \sum_{j \sim i} w_j$. As a consequence, a warm start is natural:
-survivors keep the $w_i$ on which they converged for the full graph, and
-continue iterating on $\tilde A$, rather than resetting to $w_i = 1$ and paying
-the full $\tau_{\mathrm{init}}$ again.
+a symmetric perturbation of rank at most $2$. Power iteration on $\tilde A$ needs no
+change of procedure: a surviving node's update $\tilde w_i = \sum_{j\sim i}
+w_j$ simply stops including the dead neighbor. So a warm start is natural,
+survivors keep their converged $w_i$ and continue on $\tilde A$ instead of
+resetting to $w_i = 1$.
 
-How much the warm start saves depends on how far the leading eigenvector moves.
-The Davis--Kahan theorem \citep{daviskahan1970} bounds that movement by
-$\|E\|_2/\gamma = \sqrt{\deg(v)}/\gamma$, where $\gamma$ is the gap between the
-two largest eigenvalues of $\tilde A$, so for a tolerance of $\epsilon$, the
-warm-started iteration requires $O(\log(N/\epsilon))$ rounds on an expander
-against $\tau_{\mathrm{init}}$ for a cold start
-(Proposition~\ref{prop:reelection}). The perturbation norm $\|E\|_2$ is set by
-$\deg(v)$ alone, so it is largest for high-degree nodes. Additionally, if $v$
-is the hub, the change in $\tilde\psi$ is only \emph{bounded} by
-$\|E\|_2/\gamma$. On a graph whose spectral gap does not collapse when $v$ is
-removed---like the well-connected regime of
-Section~\ref{sec:mdst-gap}---re-election is cheap.
+By Davis--Kahan \citep{daviskahan1970}, the eigenvector's movement is bounded
+by $\|E\|_2/\gamma = \sqrt{\deg(v)}/\gamma$, where $\gamma$ is $\tilde A$'s
+eigenvalue gap: largest when $v$ is the hub, smallest for a low-degree node.
+Reaching tolerance $\epsilon$ takes $O(\log(\sqrt{\deg(v)}/(\gamma\epsilon)))$
+rounds. On an expander $\gamma$ is bounded away from $0$, so it is a constant
+and the bound is $O(\log(\sqrt{N}/\epsilon))$, using $\deg(v) \leq N$; since
+$\log\sqrt{N} = \tfrac12\log N$, this is the same order as
+$O(\log(N/\epsilon))$, against $\tau_{\mathrm{init}}$ for a cold start. The
+well-connected regime of Section~\ref{sec:mdst-gap} is where re-election is
+cheap.
+
+\begin{proposition}[Warm-started re-election]
+\label{prop:reelection}
+After any node failure, the warm-started power iteration on $\tilde A$
+converges to the leading eigenvector of $\tilde A$ from the pre-failure
+$\tilde\psi$, and reaching tolerance $\epsilon$ takes
+$O\bigl(\log(\sqrt{\deg(v)}/(\gamma\epsilon))/\log(\lambda_1/\lambda_2)\bigr)$
+rounds, where $\gamma$ is the eigenvalue gap of $\tilde A$. On a graph with
+$\lambda_2$ bounded away from $0$, this is $O(\log(N/\epsilon))$.
+\end{proposition}
+
+\subsection{The Well-Connected Regime}
+\label{sec:spectral-regime}
+
+The condition for cheap re-election is a spectral gap bounded away from $0$,
+i.e., $G$ is an expander: this is the same condition, through
+$\kappa(G) \geq \lambda_2$ \citep{fiedler1973}, that keeps $G$ connected under
+node removal, and the one that makes the initial hub emergence fast. Dense
+graphs are the clean sufficient case, $\delta(G) \geq N/2$ or Erd\H{o}s--R\'{e}nyi
+with constant $p$, and this is the regime our experiments sit in. Expansion,
+not edge count, is what matters, though: a sparse random regular graph
+re-elects just as cheaply, while a dense graph with a near-bottleneck does not,
+since removing a central node can then swing centrality across the bottleneck
+and the warm start is a poor initializer. \merwft is therefore a
+fault-tolerance result for the well-connected regime, which is the regime
+where fault-tolerant coordination is normally posed.
 
 \subsection{Failure Detection and Synchronized Restart}
 \label{sec:sync}
 
 Before the survivors can re-run the iteration they must agree, without a
-coordinator, that a failure happened and start the new iteration in step. The
-tree they already built makes this cheap. Every node learned its depth $d_i$ and
-the tree height $D$ from the first downlink (\todo{check}line~9 of
-Algorithm~\ref{alg:merw-generic}), where depth is nothing but the hop count that
-message carried, and every ordinary cycle is one uplink-and-downlink traversal
-of length $2D+1$ hops.
-
-Detection reuses that same schedule. Each node expects the cycle's traffic from
-each neighbor at a known hop, so it runs one uniform timer $\tau = 2D+1$ hops,
-the length of a cycle, and suspects a neighbor dead when that neighbor's expected
-message fails to arrive within $\tau$. The rule is identical for every node; the
-hub is not special, it is simply detected by its children instead of by a parent.
-Because a dead node severs the tree into components, each is announced by its own
-first detector and the news floods each intact component; the uniform timer keeps
-the detectors' firing times within $D$ hops of each other, and each flood spans
-its component in $D$ hops, which gives the horizon.
+coordinator, that a failure happened and start together, in step. Every node
+already learned its depth $d_i$ and the tree height $D$ from the first
+downlink (line~13 of Algorithm~\ref{alg:merw-generic}), where depth is just
+the hop count that message carried; every ordinary cycle is one
+uplink-and-downlink traversal of $2D+1$ hops, and detection reuses this
+schedule directly. Each node runs one uniform timer $\tau = 2D+1$ hops, the
+length of a cycle, and suspects a neighbor dead when its expected message
+misses that window; the rule is identical for every node, and the hub is
+detected by its children exactly as any node is detected by its parent. A dead
+node severs the tree into components, each announced by its own first
+detector and flooded through its intact component; the uniform timer keeps
+detectors within $D$ hops of each other, and a flood spans a component in $D$
+hops.
 
 \begin{proposition}[Failure horizon]
 \label{prop:horizon}
@@ -555,80 +572,36 @@ surviving node receives the failure notice within $2D$ hops of the earliest
 detection.
 \end{proposition}
 
-This bound is what lets the survivors restart synchronously with no clock
-agreement. The notice carries the same hop counter the downlink used, so a node
-$h$ hops from its detector waits the remaining $2D - h$ hops before its first
-iteration step; every node's travelled-plus-waited hops sum to $2D$, so all
-survivors step together. The depth $d_i$ each node already holds does all the
-work, setting the detection deadline, bounding the skew, and serving as the
-restart countdown, with no new field added to any message. The supplementary
-material gives the construction and the horizon proof in full.
+This is what lets the survivors restart synchronously with no clock
+agreement: the notice carries the same hop counter, so a node $h$ hops from
+its detector waits the remaining $2D-h$ hops before its first iteration step,
+and every node's travelled-plus-waited hops sum to $2D$. The depth $d_i$ each
+node already holds sets the detection deadline, bounds the skew, and serves as
+the restart countdown, with nothing new added to any message. The
+supplementary material gives the construction and the horizon proof in full.
 
 \subsection{The Re-Election Procedure}
 \label{sec:spectral-hub}
 
-Once the survivors are synchronized, re-election is one warm-started iteration.
-Every surviving node keeps its current $w_i$ and resumes the gossip power
-iteration on $\tilde A$ for a fixed $\tau_{\mathrm{re}}$ rounds;
+Once synchronized, re-election is one warm-started iteration: every surviving
+node keeps its current $w_i$ and resumes the gossip power iteration on
+$\tilde A$ for a fixed $\tau_{\mathrm{re}}$ rounds, and
 Proposition~\ref{prop:reelection} shows $\tau_{\mathrm{re}} = O(\log(N/\epsilon))$
-suffices in the expander regime, against the full $\tau_{\mathrm{init}}$ of a
-cold start. The node whose refreshed $\tilde\psi_i$ is now the global maximum
-becomes the new hub, and the tree is rebuilt around it by the same max-flooding
-as at initialization, over $G \setminus \{v\}$. Because the tree is rebuilt
-rather than patched, its height is discovered from the first ordinary cycle
-exactly as $D$ was at the start; no separate height measurement is needed. When
-$v$ is an internal node the maximizer is almost always the same as before and the
-new tree differs from the old only near $v$; when $v$ is the hub the maximizer
-genuinely changes, and the same procedure elects the new center. Nothing in the
-procedure branches on which case it is.
+suffices on an expander, against the full $\tau_{\mathrm{init}}$ of a cold
+start. The node whose refreshed $\tilde\psi_i$ is now the global maximum
+becomes the new hub, and the tree is rebuilt around it by the same
+max-flooding as at initialization, over $G\setminus\{v\}$, so its height is
+discovered from the first ordinary cycle exactly as $D$ was at the start. If
+$v$ was an internal node the new tree differs from the old only near $v$; if
+$v$ was the hub the maximizer genuinely changes and the same procedure elects
+the new center; nothing in the procedure branches on which case it is.
 
-No backup is kept. The global bandit state $(\hat n,\hat s,P)$ that the hub held
-is not mirrored anywhere, but it is not lost: each node retains its own
-cumulative per-arm counts, so the first uplink after the re-flood re-aggregates
-the exact global state from the survivors, the same sum the old hub held minus
-the failed node's own contribution. The cost of dropping the backup is therefore
-one interrupted cycle, re-aggregated on resumption, not any permanent loss.
-
-\begin{proposition}[Warm-started re-election]
-\label{prop:reelection}
-After any node failure, the warm-started power iteration on $\tilde A$ converges
-to the leading eigenvector of $\tilde A$ from the pre-failure $\tilde\psi$, and
-reaching tolerance $\epsilon$ takes $O\bigl(\log(\sqrt{\deg(v)}/(\gamma\epsilon))/\log(\lambda_1/\lambda_2)\bigr)$
-rounds, where $\gamma$ is the eigenvalue gap of $\tilde A$. On a graph with
-$\lambda_2$ bounded away from $0$, this is $O(\log(N/\epsilon))$.
-\end{proposition}
-
-\subsection{When Re-Election Is Cheap}
-\label{sec:spectral-regime}
-
-The bound above ties the cost of re-election to the spectral gap of $G$: both
-the initial angle $\sqrt{\deg(v)}/\gamma$ and the contraction rate
-$\lambda_2/\lambda_1$ improve as the gap grows. The condition for cheap
-re-election is therefore a spectral gap bounded away from $0$, that is, $G$ is an
-expander. This is the same condition, through $\kappa(G) \geq \lambda_2$
-\citep{fiedler1973}, that keeps $G$ connected under node removal in the first
-place, and the same one that makes the initial hub emergence fast. Dense graphs
-are the clean sufficient case: $\delta(G) \geq N/2$ forces a large gap, as does
-an Erd\H{o}s--R\'{e}nyi graph with constant $p$, and this is the regime our
-experiments sit in. Expansion, not edge count, is what matters, though: a sparse
-random regular graph re-elects just as cheaply, while a dense graph with a
-near-bottleneck, where $\lambda_2$ is small, does not, since there removing a
-central node can swing centrality across the bottleneck and the warm start is a
-poor initializer.
-
-Hub removal is the worst case within any fixed graph by this bound, since the
-hub is the highest-degree node and so gives the largest $\|E\| =
-\sqrt{\deg(h^\star)}$, hence the largest bound on the movement of $\tilde\psi$.
-That re-election is nonetheless cheap even for the hub, on expanders, is the
-content of Proposition~\ref{prop:reelection}, and it is why we do not treat the
-hub separately: if the procedure is cheap in its worst case it is cheap
-everywhere.
-A low-degree, low-centrality node sits at the other end of the same spectrum. Its
-$\sqrt{\deg(v)}/\gamma$ is small and $E$ is supported on $v$ and its neighbors, so
-the leading eigenvector barely moves and only near $v$; the iteration reaches
-tolerance in a handful of rounds and the elected hub is the same as before. The
-gradation from that case to hub removal is continuous in $\deg(v)$, with no
-qualitative break where a different mechanism would be needed.
+No backup is kept: the global bandit state $(\hat n,\hat s,P)$ dies with the
+hub, but each node retains its own cumulative per-arm counts, so the first
+uplink after the re-flood re-aggregates the exact global state from the
+survivors, the old sum minus the failed node's own contribution. Dropping the
+backup costs one interrupted cycle, re-aggregated on resumption, not any
+permanent loss.
 
 \iffalse
 \subsection{Recovery}
@@ -656,20 +629,6 @@ promoted since, nothing changes: recovery only needs $j$ to be live and attached
 not any particular identity for $j$.
 \fi
 
-\subsection{Scope}
-\label{sec:ft-scope}
-
-\merwft inherits the spectral assumption of Section~\ref{sec:mdst-gap} on both
-counts. Re-election needs $G$ to stay connected after a node is removed, which
-holds when the node connectivity is at least $2$; by $\kappa(G) \geq \lambda_2$
-\citep{fiedler1973} an algebraic connectivity bounded away from $0$ is enough.
-And the cost of re-election is cheap only in that same well-connected regime, by
-Proposition~\ref{prop:reelection}. The one expansion condition therefore does
-double duty: it keeps the graph repairable and it keeps the repair cheap, and it
-is the same condition that makes the hub emerge cleanly in the first place.
-\merwft is a fault-tolerance result for the well-connected regime, which is the
-regime where fault-tolerant coordination is normally posed.
-
 \section{Experiments}
 \label{sec:experiments}
 
@@ -685,22 +644,19 @@ accumulate no regret during communication rounds. For best arm identification
 compares total arm pulls against Hillel's centralized algorithm as a function
 of $N$, using the same graph and hub for both.
 
-\begin{figure*}[t]
+\begin{figure}
     \centering
-    \begin{minipage}{0.48\textwidth}
-        \centering
-        \includegraphics[width=0.85\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
-        \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Top}: group regret vs.\ round. \emph{Bottom}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
-        \label{fig:regret_er}
-    \end{minipage}
-    \hfill
-    \begin{minipage}{0.48\textwidth}
-        \centering
-        \includegraphics[width=0.85\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
-        \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Top}: total arm pulls vs.\ $N$. \emph{Bottom}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
-        \label{fig:bai_er}
-    \end{minipage}
-\end{figure*}
+    \includegraphics[width=0.95\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
+    \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Top}: group regret vs.\ round. \emph{Bottom}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
+    \label{fig:regret_er}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.95\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
+    \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Top}: total arm pulls vs.\ $N$. \emph{Bottom}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
+    \label{fig:bai_er}
+\end{figure}
 
 To test the failover mechanism of Section~\ref{sec:ft} directly, we run
 \merwft on an ER graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) and kill the hub
@@ -710,7 +666,7 @@ every failure is followed by a recovery within a handful of rounds, and the
 regret curve afterward grows at the same rate as before the failure, with
 no lasting penalty.
 
-\begin{figure}[h]
+\begin{figure}
     \centering
     \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T2000_at500-1000-1500.pdf}
     \caption{Group regret for \merwft on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) with the hub killed at $t=500,1000,1500$. Dashed lines mark failures, dotted lines mark recovery. All three failures are recovered from.}
