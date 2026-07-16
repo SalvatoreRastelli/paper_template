@@ -103,14 +103,29 @@ def make_graph(graph_type, N, p=None, seed=None):
 # MERW eigenvector and routing tree (same as regret_min.py)
 # ============================================================
 
-def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
+def gossip_power_iteration(G, w0, tau=500, tol=1e-8, gossip_rounds=100):
+    """
+    Decentralized power iteration with gossip-based normalization, the single
+    primitive used both for the initial centrality and for fault-tolerant
+    re-election. No node ever performs a global reduce: each round every node
+    computes its own local log-growth rate, the nodes gossip-average those
+    rates over random neighbor pairs (approximating the global log lambda_1),
+    and each node rescales locally by its own averaged rate. The only global
+    step is a final cosmetic rescale by the max, applied once after the loop,
+    outside the decentralized iteration.
+
+    Runs on the graph G as given; to iterate on a surviving subgraph after a
+    node failure, pass the subgraph induced on the live nodes and a w0 that is
+    the pre-failure state restricted to those nodes (warm start). Returns
+    (w, rounds), where `rounds` is the number of iterations until the local
+    convergence criterion was met, or `tau` if it never converged.
+    """
     N = G.number_of_nodes()
     A = nx.to_numpy_array(G)
 
-    w = np.ones(N)
-    log_growth = np.zeros(N)
-
-    for _ in range(tau):
+    w = w0.astype(float).copy()
+    rounds = tau
+    for t in range(tau):
         w_old = w.copy()
         w_new = A @ w_old
 
@@ -129,10 +144,19 @@ def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
 
         diff = np.max(np.abs(w - w_old) / (np.abs(w_old) + 1e-15))
         if diff < tol:
+            rounds = t + 1
             break
 
     w = np.abs(w)
     w /= w.max()
+    return w, rounds
+
+
+def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
+    """Initial centrality: cold-start (w_i = 1) gossip power iteration."""
+    N = G.number_of_nodes()
+    w, _ = gossip_power_iteration(G, np.ones(N), tau=tau, tol=tol,
+                                  gossip_rounds=gossip_rounds)
     return w
 
 
@@ -204,24 +228,23 @@ def build_routing_tree(G, psi, dead=None):
 
 def warm_started_reelection(G, psi, dead, tau_re):
     """
-    Warm-started power iteration on A restricted to the surviving subgraph,
-    starting from the pre-failure psi (Proposition: Warm-started
-    re-election). Dead nodes are dropped from the state entirely rather than
-    zeroed in place, so the iteration is exactly power iteration on the
-    smaller adjacency matrix A_tilde, not on A with a masked row/column.
-    Runs a fixed tau_re rounds (no convergence check), matching the
-    protocol's fixed re-election budget, and returns a full-length psi_new
-    array with -1 at dead positions.
+    Warm-started decentralized re-election on the surviving subgraph. The
+    survivors run the same gossip power iteration as at initialization
+    (gossip_power_iteration), but seeded from the pre-failure psi restricted
+    to the live nodes rather than from all-ones. Dead nodes are dropped from
+    the state entirely, so the iteration is exactly gossip power iteration on
+    the smaller graph G \\ {dead}, not on the full graph with a masked
+    row/column. Runs a fixed tau_re rounds (matching the protocol's fixed
+    re-election budget) and returns a full-length psi_new array with -1 at
+    dead positions.
     """
     N = G.number_of_nodes()
     alive = [i for i in range(N) if not dead[i]]
-    idx = {node: k for k, node in enumerate(alive)}
-    A_tilde = nx.to_numpy_array(G, nodelist=alive)
+    G_sub = G.subgraph(alive).copy()
+    G_sub = nx.convert_node_labels_to_integers(G_sub, ordering="sorted")
 
-    w = psi[alive].copy()
-    for _ in range(tau_re):
-        w = A_tilde @ w
-        w = w / w.max()
+    w0 = psi[alive].copy()
+    w, _ = gossip_power_iteration(G_sub, w0, tau=tau_re, tol=0.0)
 
     psi_new = np.full(N, -1.0)
     for k, node in enumerate(alive):

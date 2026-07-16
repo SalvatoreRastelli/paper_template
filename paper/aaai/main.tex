@@ -447,11 +447,44 @@ Under the \merw relay protocol, the leading term of the expected group cumulativ
 \subsection{Instantiation: Best Arm Identification}
 \label{sec:bai}
 
-In BAI, given confidence $\delta$, the goal is to identify $a^\star = \arg\max_k \mu_k$ with probability $\geq 1-\delta$ using as few total pulls as possible. \merw-BAI adapts Hillel's Algorithm 3 \citep{hillel2013distributed} to the same generic protocol, run in elimination rounds $r = 1, 2, \ldots$ over a surviving arm set $S_r \subseteq \{1,\ldots,K\}$, initialized to $S_0 = \{1,\ldots,K\}$ and only shrinking. In round $r$, every agent $i$ pulls each arm $k \in S_{r-1}$ exactly $L_r = \lceil t_r - t_{r-1}\rceil$ times, where $t_r = \frac{2}{N\epsilon_r^2}\ln\frac{4Kr^2}{\delta}$ is Hillel's schedule and $\epsilon_r = 2^{-r}$ ($t_0 = 0$), and its local contribution is the vector of its own reward sums over that round, $b_i = (b_{i,k})_{k \in S_{r-1}}$. Every node computes $L_r$ independently from this formula, so no per-round negotiation is needed, but $N$ appears in the formula itself, so every node must know $N$ in advance: if two nodes used different values of $N$ they would compute different $L_r$ and desynchronize. This is unlike \merw-UCB, whose UCB bonus depends only on the total-pull count $P$ as it is actually observed through the downlink, never on $N$ directly. In principle $N$ could be learned the same way the tree height $D$ is, by having the hub count distinct senders on an uplink and broadcast the result down; but $D$ is discovered as a free byproduct of the first ordinary cycle, whereas the very first $L_1$ is needed \emph{before} any uplink has happened, so learning $N$ this way would require a dedicated bootstrap cycle up front. We treat $N$ as known in advance and leave decentralized bootstrap for future work. The hub sums the aggregate $B_k = \sum_i b_{i,k}$ into the empirical mean $\bar\mu_k = B_k / (N L_r)$ for each $k \in S_{r-1}$, eliminates every arm more than $\epsilon_r$ below the best empirical mean, $S_r = \{k \in S_{r-1} : \bar\mu_k \geq \max_{k'} \bar\mu_{k'} - \epsilon_r\}$, and broadcasts $S_r$ on the downlink instead of a running statistic like $(\hat n, \hat s, P)$. The hub, not any other node, determines when to stop, once $|S_r|=1$, and this outcome is broadcast on the downlink like any other decision. Consequently \merw-BAI's round length $L_r + 2D$ shrinks across elimination rounds as $\epsilon_r$ tightens, unlike \merw-UCB's fixed $2D+1$.
+In BAI, given confidence $\delta$, the goal is to identify $a^\star =
+\arg\max_k \mu_k$ with probability $\geq 1-\delta$ using as few total pulls as
+possible. \merw-BAI adapts \citet{hillel2013distributed}'s Algorithm 3 to the
+same generic protocol, run in elimination rounds $r = 1, 2, \ldots$ over a
+surviving arm set $S_r \subseteq \{1,\ldots,K\}$, initialized to
+$S_0 = \{1,\ldots,K\}$ and only shrinking. In round $r$, every agent $i$
+pulls each arm $k \in S_{r-1}$ exactly $L_r = \lceil t_r - t_{r-1}\rceil$
+times, where $t_r = \frac{2}{N\epsilon_r^2}\ln\frac{4Kr^2}{\delta}$ is their
+elimination schedule and $\epsilon_r = 2^{-r}$ ($t_0 = 0$), and its local
+contribution is the vector of its own reward sums over that round,
+$b_i = (b_{i,k})_{k \in S_{r-1}}$. Every node computes $L_r$ independently
+from this formula, so no per-round negotiation is needed, but $N$ appears in
+the formula itself, so every node must know $N$ in advance: if two nodes used
+different values of $N$ they would compute different $L_r$ and desynchronize.
+This is unlike \merw-UCB, whose UCB bonus depends only on the total-pull
+count $P$ as it is actually observed through the downlink, never on $N$
+directly. In principle $N$ could be learned the same way the tree height $D$
+is, by having the hub count distinct senders on an uplink and broadcast the
+result down; but $D$ is discovered as a free byproduct of the first ordinary
+cycle, whereas the very first $L_1$ is needed \emph{before} any uplink has
+happened, so learning $N$ this way would require a dedicated bootstrap cycle
+up front. We treat $N$ as known in advance and leave decentralized bootstrap
+for future work. The hub sums the aggregate $B_k = \sum_i b_{i,k}$ into the
+empirical mean $\bar\mu_k = B_k / (N L_r)$ for each $k \in S_{r-1}$, eliminates
+every arm more than $\epsilon_r$ below the best empirical mean,
+$S_r = \{k \in S_{r-1} : \bar\mu_k \geq \max_{k'} \bar\mu_{k'} - \epsilon_r\}$,
+and broadcasts $S_r$ on the downlink instead of a running statistic like
+$(\hat n, \hat s, P)$. The hub, not any other node, determines when to stop,
+once $|S_r|=1$, and this outcome is broadcast on the downlink like any other
+decision. Consequently \merw-BAI's round length $L_r + 2D$ shrinks across
+elimination rounds as $\epsilon_r$ tightens, unlike \merw-UCB's fixed $2D+1$.
 
-\begin{corollary}[BAI sample complexity matches Hillel]
+\begin{corollary}[BAI sample complexity matches centralized BAI]
 \label{cor:bai}
-The total number of arm pulls required by \merw-BAI to identify $a^\star$ with probability $\geq 1-\delta$ is identical to Hillel's algorithm; the only overhead is $2D$ extra time steps per elimination round.
+The total number of arm pulls required by \merw-BAI to identify $a^\star$ with
+probability $\geq 1-\delta$ matches the centralized algorithm of
+\citet{hillel2013distributed}; the only overhead is $2D$ extra time steps per
+elimination round.
 \end{corollary}
 
 
@@ -495,7 +528,7 @@ describe a fault-tolerant variant, \merwft, that mitigates the effect of node
 deletion for sufficiently well-connected graphs, as per
 Sec.~\ref{sec:mdst-gap}. Under \merwft, any single node $v\in G$ can fail, and
 the surviving nodes can efficiently recompute the eigenvector centrality and
-thus rebuild a new routing tree that spans the surviving graph $G\setminus v$.
+thus rebuild a new routing tree that spans the surviving graph $G\setminus \{v\}$.
 
 \subsection{Node Removal as a Perturbation}
 \label{sec:perturbation}
@@ -537,13 +570,11 @@ $\lambda_2$ bounded away from $0$, this is $O(\log(N/\epsilon))$.
 The condition for cheap re-election is a spectral gap bounded away from $0$,
 i.e., $G$ is an expander: this is the same condition, through
 $\kappa(G) \geq \lambda_2$ \citep{fiedler1973}, that keeps $G$ connected under
-node removal, and the one that makes the initial hub emergence fast. Dense
-graphs are the clean sufficient case, $\delta(G) \geq N/2$ or Erd\H{o}s--R\'{e}nyi
-with constant $p$, and this is the regime our experiments sit in. Expansion,
-not edge count, is what matters, though: a sparse random regular graph
-re-elects just as cheaply, while a dense graph with a near-bottleneck does not,
-since removing a central node can then swing centrality across the bottleneck
-and the warm start is a poor initializer. \merwft is therefore a
+node removal, and the one that makes the initial hub emergence fast. Expansion,
+not edge count, is what matters: a sparse random regular graph re-elects just
+as cheaply as a dense one, while a dense graph with a near-bottleneck does
+not, since removing a central node can then swing centrality across the
+bottleneck and the warm start is a poor initializer. \merwft is therefore a
 fault-tolerance result for the well-connected regime, which is the regime
 where fault-tolerant coordination is normally posed.
 
@@ -579,29 +610,11 @@ and every node's travelled-plus-waited hops sum to $2D$. The depth $d_i$ each
 node already holds sets the detection deadline, bounds the skew, and serves as
 the restart countdown, with nothing new added to any message. The
 supplementary material gives the construction and the horizon proof in full.
-
-\subsection{The Re-Election Procedure}
-\label{sec:spectral-hub}
-
-Once synchronized, re-election is one warm-started iteration: every surviving
-node keeps its current $w_i$ and resumes the gossip power iteration on
-$\tilde A$ for a fixed $\tau_{\mathrm{re}}$ rounds, and
-Proposition~\ref{prop:reelection} shows $\tau_{\mathrm{re}} = O(\log(N/\epsilon))$
-suffices on an expander, against the full $\tau_{\mathrm{init}}$ of a cold
-start. The node whose refreshed $\tilde\psi_i$ is now the global maximum
-becomes the new hub, and the tree is rebuilt around it by the same
-max-flooding as at initialization, over $G\setminus\{v\}$, so its height is
-discovered from the first ordinary cycle exactly as $D$ was at the start. If
-$v$ was an internal node the new tree differs from the old only near $v$; if
-$v$ was the hub the maximizer genuinely changes and the same procedure elects
-the new center; nothing in the procedure branches on which case it is.
-
-No backup is kept: the global bandit state $(\hat n,\hat s,P)$ dies with the
-hub, but each node retains its own cumulative per-arm counts, so the first
-uplink after the re-flood re-aggregates the exact global state from the
-survivors, the old sum minus the failed node's own contribution. Dropping the
-backup costs one interrupted cycle, re-aggregated on resumption, not any
-permanent loss.
+Once the iteration converges, the node whose refreshed $\tilde\psi_i$ is now
+the global maximum becomes the new hub, and the tree is rebuilt around it by
+the same max-flooding as at initialization, over $G\setminus\{v\}$, so its
+height is discovered from the first ordinary cycle exactly as $D$ was at the
+start.
 
 \iffalse
 \subsection{Recovery}
@@ -641,8 +654,9 @@ Figure~\ref{fig:regret_er}), the hub, identified without any central authority,
 coordinates the network to logarithmic group regret while non-hub agents
 accumulate no regret during communication rounds. For best arm identification
 ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$), Figure~\ref{fig:bai_er}
-compares total arm pulls against Hillel's centralized algorithm as a function
-of $N$, using the same graph and hub for both.
+compares total arm pulls against the centralized reference algorithm
+\citep{hillel2013distributed} as a function of $N$, using the same graph and
+hub for both.
 
 \begin{figure}
     \centering
@@ -683,8 +697,9 @@ sparser graphs and other random graph models is left for future work.
 The graph must be connected and undirected, and stays that way except for
 the node failures \merwft handles. $D$ can be large on sparse or path-like
 graphs; this is exactly the regime Section~\ref{sec:mdst-gap} identifies.
-BAI needs agents to know $N$ in advance, to compute Hillel's pull schedule;
-regret minimization needs no such thing, since it learns everything from
+BAI needs agents to know $N$ in advance, to compute the elimination schedule
+of \citet{hillel2013distributed}; regret minimization needs no such thing,
+since it learns everything from
 the protocol itself. \merwft only covers fail-stop failures: a node works
 correctly, goes silent, or comes back and rejoins through the recovery
 mechanism of Section~\ref{sec:ft}. It has no mechanism for a node that stays
