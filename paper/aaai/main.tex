@@ -31,6 +31,7 @@
 
 \setcounter{secnumdepth}{2}
 
+
 \newcommand{\merw}{EigenTree\xspace}
 \newcommand{\merwft}{EigenTree-FT\xspace}
 \newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
@@ -454,7 +455,7 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
 \end{corollary}
 
 
-\begin{table}[h]
+\begin{table}
 \caption{Function behavior across different algorithm instantiations.}
 \label{tab:instantiations}
 \small
@@ -469,6 +470,7 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
                    & \textsc{Uplink}        & per-arm pull counts and reward sums since last cycle, $(n_i,s_i)$ \\
                    & \textsc{Hub-Decide}    & UCB-pull on $B$; never stops early \\
                    & \textsc{Downlink}      & aggregate $(\hat n,\hat s,P)$ \\
+                   & \textsc{Uplink}      	& \\
 \midrule
 % --- SECOND INSTANTIATION ---
 \textbf{\merw-BAI} & \textsc{Init}       & $\sigma_i \leftarrow S_0$, 0 rounds \\
@@ -476,6 +478,7 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
                    & \textsc{Uplink}     & per-arm reward sums over $S_{r-1}$ this round, $b_i$ \\
                    & \textsc{Hub-Decide} & eliminate below $\epsilon_r$; stop when $|S_r|{=}1$ \\
                    & \textsc{Downlink}   & surviving set $S_r$ \\
+                   & \textsc{Uplink}   	 & \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -484,58 +487,53 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
 \section{Fault Tolerance}
 \label{sec:ft}
 
-A centralized coordinator like the one identified by \merw has one obvious
-weakness: if it fails, the system fails with it, since every agent's
-information passes through that single point. We describe a fault-tolerant
-variant, \merwft, under which any single node can fail and the routing tree
-$\mathcal{T}$ rebuilds itself. \merwft treats every failure the same way. A dead
-node is a perturbation of the graph, the survivors re-run the same eigenvector
-machinery that elected the original hub on the perturbed graph, and the tree is
-rebuilt around whoever is now most central. There is no separate procedure for
-the hub and for an internal node, and no pre-designated backup. The hub is only
-the extreme case of one procedure: removing it is the largest perturbation the
-graph can suffer, so it is where the re-election has the most work to do. The
-graphs on which that work stays cheap are exactly the well-connected graphs of
-Section~\ref{sec:mdst-gap}, and classifying them is the content of this section.
+A centralized system like the one identified by \merw has one obvious weakness:
+if the hub fails, the system fails with it, since every agent's information
+passes through that single point. More generally, the failure of any non-leaf
+node can break the routing tree $\mathcal{T}$, and thus the protocol. We
+describe a fault-tolerant variant, \merwft, that mitigates the effect of node
+deletion for sufficiently well-connected graphs, as per
+Sec.~\ref{sec:mdst-gap}. Under \merwft, any single node $v\in G$ can fail, and
+the surviving nodes can efficiently recompute the eigenvector centrality and
+thus rebuild a new routing tree that spans the surviving graph $G\setminus v$.
 
 \subsection{Node Removal as a Perturbation}
 \label{sec:perturbation}
 
-Removing a node $v$ deletes row and column $v$ of the adjacency matrix. Since
-$A$ has no self-loops, the result is
+Removing a node $v$ removes a row and column $v$ of the adjacency matrix. Since
+$A$ has no self-loops, for $e_v$ the indicator vector of node $v$, the pruned adjacency is
 \[
 	\tilde A = A + E, \qquad E = -\bigl(A e_v e_v^\top + e_v e_v^\top A\bigr),
 \]
-a symmetric perturbation of rank at most $2$, with spectral norm
-$\|E\|_2 = \|A e_v\|_2 = \sqrt{\deg(v)}$, the Euclidean norm of the deleted
-node's column. The distributed power iteration that computes $\tilde\psi$ already
-runs on $\tilde A$ for free after the deletion: a surviving node's update
-$\tilde w_i = \sum_{j \sim i} w_j$ simply stops including the dead neighbor, so
-no node needs to know that $A$ changed, only that one neighbor went silent. This
-makes a warm start natural. The survivors keep their current $w_i$ and continue
-iterating on $\tilde A$, rather than resetting to $w_i = 1$ and paying the full
-$\tau_{\mathrm{init}}$ again.
+a symmetric perturbation of rank at most $2$.
+The eigenvector centrality of the perturbed graph, $\tilde\psi$ can be computed via
+distributed power iteration on $\tilde A$, much like it was for the unperturbed
+graph: neighbors of the dead node will stop including it in their update
+$\tilde w_i = \sum_{j \sim i} w_j$. As a consequence, a warm start is natural:
+survivors keep the $w_i$ on which they converged for the full graph, and
+continue iterating on $\tilde A$, rather than resetting to $w_i = 1$ and paying
+the full $\tau_{\mathrm{init}}$ again.
 
 How much the warm start saves depends on how far the leading eigenvector moves.
 The Davis--Kahan theorem \citep{daviskahan1970} bounds that movement by
 $\|E\|_2/\gamma = \sqrt{\deg(v)}/\gamma$, where $\gamma$ is the gap between the
-two largest eigenvalues of $\tilde A$, so the warm-started iteration reaches
-tolerance in $O(\log(N/\epsilon))$ rounds on an expander against
-$\tau_{\mathrm{init}}$ for a cold start (Proposition~\ref{prop:reelection}). The
-perturbation norm $\|E\|_2$ is set by $\deg(v)$ alone, so it is largest when
-$v$ is the hub and smallest for a low-degree node; the actual movement of
-$\tilde\psi$ is only bounded by $\|E\|_2/\gamma$, not equal to it, but on a
-graph whose spectral gap does not itself collapse when $v$ is removed, this
-bound is what governs the cost, so the well-connected regime of
-Section~\ref{sec:mdst-gap} is also the regime where re-election is cheap.
+two largest eigenvalues of $\tilde A$, so for a tolerance of $\epsilon$, the
+warm-started iteration requires $O(\log(N/\epsilon))$ rounds on an expander
+against $\tau_{\mathrm{init}}$ for a cold start
+(Proposition~\ref{prop:reelection}). The perturbation norm $\|E\|_2$ is set by
+$\deg(v)$ alone, so it is largest for high-degree nodes. Additionally, if $v$
+is the hub, the change in $\tilde\psi$ is only \emph{bounded} by
+$\|E\|_2/\gamma$. On a graph whose spectral gap does not collapse when $v$ is
+removed---like the well-connected regime of
+Section~\ref{sec:mdst-gap}---re-election is cheap.
 
-\subsection{Detecting the Failure and Restarting Together}
+\subsection{Failure Detection and Synchronized Restart}
 \label{sec:sync}
 
 Before the survivors can re-run the iteration they must agree, without a
 coordinator, that a failure happened and start the new iteration in step. The
 tree they already built makes this cheap. Every node learned its depth $d_i$ and
-the tree height $D$ from the first downlink (line~9 of
+the tree height $D$ from the first downlink (\todo{check}line~9 of
 Algorithm~\ref{alg:merw-generic}), where depth is nothing but the hop count that
 message carried, and every ordinary cycle is one uplink-and-downlink traversal
 of length $2D+1$ hops.
