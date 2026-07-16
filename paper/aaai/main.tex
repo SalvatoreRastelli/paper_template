@@ -69,11 +69,8 @@
 	identification---where the method recovers centralized-like results in
 	finite time.
 	We further present a fault-tolerant version of the protocol, addressing the
-	coordinator's structural weakness as a single point of failure: in the
-	well-connected regime where fault tolerance is normally studied, the same
-	spectral expansion that makes the coordinator emerge cleanly also lets the
-	tree be repaired locally and cheaply after a node fails, so the protocol
-	degrades gracefully rather than collapsing.
+	coordinator's structural weakness as a single point of failure: any node,
+	including the coordinator, can fail and be replaced by re-election.
 \end{abstract}
 
 \section{Introduction}
@@ -111,12 +108,12 @@ true centralized coordinator for any decision rule that depends only on
 globally aggregated per-agent statistics, at the cost of a bounded
 communication overhead determined by the tree's depth.
 
-This last property is what makes \merw a \emph{protocol} rather than a single
-algorithm: any decentralized cooperative-learning task whose decision rule
-depends only on globally aggregated per-agent statistics can be run over the
-same emergent hub-and-tree structure by supplying two application-specific
-rules, namely 1) what each agent contributes locally and 2) what the hub
-decides from the aggregate. We instantiate both rules for two standard
+Any decentralized cooperative-learning task whose decision rule depends only
+on globally aggregated per-agent statistics can therefore run over the same
+emergent hub-and-tree structure, by supplying two application-specific rules:
+1) what each agent contributes locally, and 2) what the hub decides from the
+aggregate. \merw is this protocol, parameterized by those two rules; we
+instantiate both for two standard
 cooperative multi-armed bandit objectives, \emph{regret minimization} and
 \emph{best arm identification} (BAI), and show in both cases that the
 emergent coordinator recovers centralized-level performance.
@@ -131,8 +128,8 @@ tree around whoever is now most central. No node is treated specially and no
 backup is kept. Removing the hub is simply the largest perturbation, so it is
 where re-election has the most work to do; a low-degree node barely moves the
 centralities and re-election reduces to a local re-attach. The cost is governed
-by the graph's spectral gap, so the same expansion that makes the hub emerge
-cleanly also makes the repair cheap.
+by the graph's spectral gap, the same quantity that governs hub emergence in
+Section~\ref{sec:mdst-gap}.
 
 \paragraph{Contributions.} (1) A fully decentralized protocol for building a
 centralized communication structure: the hub and tree emerge from local
@@ -150,44 +147,43 @@ spectral gap.
 \label{sec:related}
 
 \paragraph{Cooperative multi-agent bandits.} Coop-UCB2
-\citep{landgren2021distributed} uses doubly stochastic consensus weights to
-diffuse observations across the graph; every agent plays an equivalent role and
-no coordinator is assumed. % Mart\'inez-Rubio et al.\
-\cite{martinez2019decentralized} introduce the total-pull clock we adopt to
-index UCB confidence intervals by actual observations rather than wall-clock
-rounds.
-% Hillel et al.\ 
-\cite{hillel2013distributed} study cooperative BAI
-under all-to-all broadcast; we build directly on their Algorithm 3, replacing
-the broadcast with hop-by-hop relay over the routing tree. In all three cases, the
-communication model is fixed in advance (symmetric gossip or all-to-all);
-\merw instead derives a communication structure, the hub and tree, from the
-graph itself, and shows it is sufficient for the same class of decision rules.
+\citep{landgren2021distributed} diffuses observations across the graph with
+doubly stochastic consensus weights; every agent plays an equivalent role and
+no coordinator is assumed. \cite{martinez2019decentralized} introduce the
+total-pull clock we adopt to index UCB confidence intervals by actual
+observations rather than wall-clock rounds. \cite{hillel2013distributed} study
+cooperative BAI under all-to-all broadcast; we build directly on their
+Algorithm 3, replacing the broadcast with hop-by-hop relay over the routing
+tree. All three fix the communication model in advance, symmetric gossip or
+all-to-all; \merw instead derives the communication structure, the hub and
+tree, from the graph itself, and is sufficient for the same class of decision
+rules.
 
 \paragraph{Eigenvector centrality and decentralized computation.}
-Eigenvector centrality can be studied in the context of Maximal Entropy Random
-Walk \citep{burda2009localization}, where it appears in the associated
-stationary distribution. This framing gives an information-theoretic meaning
-for eigenvector centrality, and it is on the basis of this argument that we
-justify its usage (see Sec.~\ref{sec:merw}).
-In principle, computing the eigenvector centrality requires solving the
-eigenvalue problem associated with the graph $G$;
+Eigenvector centrality appears as the stationary distribution of Maximal
+Entropy Random Walk \citep{burda2009localization}, which is the
+information-theoretic argument we use to justify it (Sec.~\ref{sec:merw}).
+Computing it exactly requires solving the graph's eigenvalue problem;
 \cite{jelasity2007asynchronous} give a gossip-based normalization for
 distributed power iteration that avoids a global all-reduce, which we use
-directly to compute the first eigenvector without any agent ever knowing $N$.
+directly so no agent ever needs to know $N$.
 
-\paragraph{Fault tolerance in tree-structured coordination.} Standard responses
-to coordinator failure pre-identify a successor that promotes itself locally:
-OSPF's Backup Designated Router \citep{rfc2328} and RSTP's Alternate Port
-\citep{ieee8021w} both do this, and \cite{lamport2009vertical} formalize passive
-replication as a special case of Paxos. These patterns patch the tree around a
-stand-in but leave the coordinator's identity fixed, which is wrong when the
-failed node was the elected center: the center itself moves. \merwft instead
-recomputes the center, treating a node failure as a low-rank perturbation of the
-adjacency matrix and bounding the resulting movement of the leading eigenvector
-by the Davis--Kahan theorem \citep{daviskahan1970}. This ties the repair cost to
-the spectral gap and lets one procedure cover both hub and non-hub failure with
-no backup and no special case.
+\paragraph{Leader election and fault tolerance.} Classical leader election,
+Bully \citep{garciamolina1982} and ring-based extrema-finding
+\citep{changroberts1979}, elects the highest-ID surviving process by
+message-passing; the result depends only on process identities, not on graph
+structure, so a failure is repaired by the same election regardless of which
+node is lost or how central it was. \merwft elects by eigenvector centrality
+instead, so a failure is a change to the quantity being elected on, not just a
+removal from the candidate pool: we treat it as a low-rank perturbation of the
+adjacency matrix and bound the resulting movement of the leading eigenvector by
+the Davis--Kahan theorem \citep{daviskahan1970}. Perturbation analysis of
+graph spectra under node removal has been studied for how it shifts a
+network's dynamical behavior \citep{restrepo2006}; we use the same perturbation
+view constructively, to warm-start the re-election itself rather than to
+characterize the shift. This ties the repair cost to the spectral gap and lets
+one procedure cover any node's failure, hub or not, with no backup and no
+special case.
 
 \paragraph{Minimum-diameter spanning trees.} Choosing the coordinator to
 directly minimize the routing tree's diameter is a solved problem: the optimal
@@ -195,20 +191,17 @@ root is the graph's absolute center, and a shortest-path tree rooted there is a
 minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. This
 has been made fully distributed
 \citep{bui2013distributed,butelle1995selfstabilizing}, including a
-self-stabilizing version that recovers after a fault. These methods are exact,
-but the cost is structural: computing the absolute center requires every node
-to hold all-pairs shortest-path information, i.e., full topological knowledge
-of $G$, not just its own neighborhood: $O(N)$ per-node distance entries at
-minimum, and $O(N^2)$ total network state \citep{bui2013distributed}. A
-permanent node failure changes the graph itself, so the center may move, and
-the construction (or, in the self-stabilizing variant, a full reconvergence
-over the network) must run again, with no bounded, localized way to react to a
-single failure. \merw makes the opposite trade-off: the hub is chosen from
-local gossip alone, with no agent ever storing distances to more than its
-immediate neighbors, and \merwft recovers from a single node failure by a
-warm-started re-election whose cost is $O(\log(N/\epsilon))$ rounds on an
-expander, rather than a full reconvergence over the network.
-Section~\ref{sec:mdst-gap} quantifies what this costs in tree diameter.
+self-stabilizing version that recovers after a fault, but the cost is
+structural: computing the absolute center requires every node to hold
+all-pairs shortest-path information, $O(N)$ per-node distance entries at
+minimum and $O(N^2)$ total network state \citep{bui2013distributed}, not just
+its own neighborhood. A node failure changes the graph itself, so the center
+may move, and even the self-stabilizing variant reacts by reconverging over
+the whole network rather than localizing the repair to the failure.
+\merw only ever stores distances to immediate neighbors, and \merwft recovers
+from a single node failure by a warm-started re-election costing
+$O(\log(N/\epsilon))$ rounds on an expander, without touching the rest of the
+network.
 
 \section{EigenTree: The Protocol}
 
@@ -332,19 +325,14 @@ to its recipient only at the start of the next step.
 
 Algorithm~\ref{alg:merw-generic} gives \merw as a single generic protocol.
 After initialization, agents repeat a fixed cycle of four phases: Pull,
-Uplink, Hub decision, Downlink. Three parts of this cycle are left open for
-an application to fill in:
-\begin{itemize}
-\item $\textsc{Init}$
-\item $\textsc{LocalPull}$
-\item $\textsc{HubDecide}$
-\end{itemize}
-Together these three fix what each agent contributes locally and what the
-hub decides from the aggregate $B$. Any decentralized learning task whose
-decision rule fits Theorem~\ref{thm:coordinator} can run over the same
-emergent tree this way, just by choosing a different $\textsc{Init}$,
+Uplink, Hub decision, Downlink. An application supplies $\textsc{Init}$,
+$\textsc{LocalPull}$, and $\textsc{HubDecide}$, which fix what each agent
+contributes locally and what the hub decides from the aggregate $B$; Uplink
+and Downlink carry whatever these three produce. Any decentralized learning
+task whose decision rule fits Theorem~\ref{thm:coordinator} can run over the
+same emergent tree this way, just by choosing a different $\textsc{Init}$,
 $\textsc{LocalPull}$, and $\textsc{HubDecide}$. Table~\ref{tab:instantiations}
-gives these three for regret minimization and best arm identification,
+gives the full cycle for regret minimization and best arm identification,
 detailed in the two subsections below.
 
 \begin{algorithm}[tb]
@@ -426,18 +414,29 @@ D - D' \leq \left\lceil \frac{\lambda_\infty + \lambda_2}{4\lambda_2} \ln(N-1) \
 \]
 \end{theorem}
 
-Unlike Theorem~\ref{thm:mdst-gap}, this bound does not rely on $h^\star$'s own degree at all: it holds for the eccentricity of \emph{any} vertex, including $h^\star$, purely from the graph's global expansion. It grows with $N$ rather than staying constant, but it applies to a much wider class of graphs, including sparse ones, as long as they do not have a bottleneck that makes $\lambda_2$ small. A long path or cycle, whose algebraic connectivity vanishes as $N$ grows, is exactly the kind of graph excluded by this hypothesis, and is also where the worst-case behavior above is observed.
+This bound does not depend on $h^\star$'s own degree, only on the graph's
+overall expansion, so it holds much more broadly than Theorem~\ref{thm:mdst-gap},
+including on sparse graphs. It grows with $N$ instead of staying at 2, and it
+fails exactly on graphs like a long path or cycle, where $\lambda_2$ vanishes as
+$N$ grows and the worst case from earlier is observed. Theorem~\ref{thm:mdst-gap}
+already covers Erd\H{o}s--R\'{e}nyi graphs with no extra proof: for $G(N,p)$
+with $p$ above $1/2$ by a constant margin, degrees concentrate tightly around
+$(N-1)p$, so its hypothesis holds with probability approaching 1, and $D-D'$ is
+at most one hop with high probability. \merw does not try to avoid the worst
+case directly, since doing so would need the same all-pairs distances that
+exact MDST construction depends on, which is the global knowledge \merw is
+built to avoid.
 
-Theorem~\ref{thm:mdst-gap} already yields a high-probability guarantee on random graphs with no new proof: on an Erd\H{o}s--R\'{e}nyi graph $G(N,p)$ with $p$ bounded above $1/2$ by a constant margin, every node's degree concentrates tightly around its mean $(N-1)p$, so $\deg(h^\star)+\delta_{\bar N}(h^\star)$ exceeds $N$ with probability approaching 1 as $N$ grows. So on dense enough Erd\H{o}s--R\'{e}nyi graphs, the difference between $D$ and $D'$ is, with high probability, negligible: at most one hop.
-
-\merw does not try to avoid the worst case directly: doing so would require the same all-pairs distance information that exact MDST construction depends on (Section~\ref{sec:related}), which is precisely the global knowledge \merw is designed to do without.
-
-The algebraic connectivity $\lambda_2$ controls three things at once. It sets the depth gap (Theorem~\ref{thm:mdst-gap-spectral}). It sets the rate at which the gossip computing $\tilde\psi$ converges, since that gossip is a power iteration and contracts with the spectral gap. And it lower-bounds the node connectivity, $\kappa(G) \geq \lambda_2$ \citep{fiedler1973}, so a graph with $\lambda_2$ bounded away from $0$ is hard to disconnect by removing nodes. When $\lambda_2$ is large the hub is well-defined, the tree is shallow, gossip is fast, and a lost node is repaired by a cheap warm-started re-election (Section~\ref{sec:ft}); this is also the regime where fault tolerance is usually studied. When $\lambda_2$ is small, on sparse or path-like graphs, all three weaken together: $\tilde\psi$ concentrates less sharply and the hub is less clear-cut, gossip is slower, and $D$ approaches the worst case above. The fault-tolerance guarantees of Section~\ref{sec:ft} apply in the first regime.
+$\lambda_2$ is also what governs the cost of the fault tolerance in
+Section~\ref{sec:ft}: a lost node is repaired by a warm-started re-election
+whose cost is set by the same spectral gap. When $\lambda_2$ is bounded away
+from $0$, that repair is cheap; on sparse or path-like graphs, where $\lambda_2$
+is small, it is not.
 
 \subsection{Instantiation: Regret Minimization}
 \label{sec:regret}
 
-With $K$ arms of unknown means $\mu_1 \geq \cdots \geq \mu_K$ and sub-Gaussian rewards, the objective is to minimize $R(T) = \sum_{i}\sum_{t=1}^T \mathbb{E}[\mu_1 - \mu_{a_i(t)}]$. Each agent's local contribution $b_i$ is its new per-arm pull counts and reward sums since the last cycle; the hub's decision rule pulls the UCB1-maximizing arm \citep{auer2002} on the aggregate and broadcasts the running total $(\hat n, \hat s, P)$, where the total-pull count $P$ (following \citep{martinez2019decentralized}) lets every node use a consistent UCB bonus. Each relay cycle lasts $2D+1$ rounds: one pull round, $D$ uplink rounds, one hub-decision round, $D$ downlink rounds.
+With $K$ arms of unknown means $\mu_1 \geq \cdots \geq \mu_K$ and sub-Gaussian rewards, the objective is to minimize $R(T) = \sum_{i}\sum_{t=1}^T \mathbb{E}[\mu_1 - \mu_{a_i(t)}]$. Each agent $i$ keeps two length-$K$ vectors, $n_i, s_i \in \mathbb{R}^K$, its own per-arm pull counts and reward sums since the last cycle; these are exactly the local contribution $b_i = (n_i, s_i)$ that Algorithm~\ref{alg:merw-generic} aggregates. The hub sums these into the running totals $\hat n = \sum_i n_i \in \mathbb{R}^K$ and $\hat s = \sum_i s_i \in \mathbb{R}^K$, one pull count and one reward sum per arm, pulls the UCB1-maximizing arm \citep{auer2002}, i.e., $\arg\max_k \hat s_k/\hat n_k + \sqrt{c\log(P)/\hat n_k}$, and broadcasts $(\hat n, \hat s, P)$ on the downlink. The scalar $P = \sum_k \hat n_k$ is the total pull count across all arms; it is carried alongside $\hat n$, rather than recomputed by summing $\hat n$ every round, so that every node applies the same exploration bonus without an extra reduction (following \citep{martinez2019decentralized}). Each relay cycle lasts $2D+1$ rounds: one pull round, $D$ uplink rounds, one hub-decision round, $D$ downlink rounds.
 
 \begin{corollary}[Regret matches centralized UCB]
 \label{cor:regret}
@@ -447,7 +446,7 @@ Under the \merw relay protocol, the leading term of the expected group cumulativ
 \subsection{Instantiation: Best Arm Identification}
 \label{sec:bai}
 
-In BAI, given confidence $\delta$, the goal is to identify $a^\star = \arg\max_k \mu_k$ with probability $\geq 1-\delta$ using as few total pulls as possible. \merw-BAI adapts Hillel's Algorithm 3 \citep{hillel2013distributed} to the same generic protocol: each agent's local contribution $b_i$ is its per-arm sums over the current surviving arm set $S_{r-1}$, pulled $L_r = \lceil t_r - t_{r-1} \rceil$ times each round, where $t_r = \frac{2}{N\epsilon_r^2}\ln\frac{4Kr^2}{\delta}$ is Hillel's schedule and $\epsilon_r = 2^{-r}$. Every node computes $L_r$ independently from this formula, so no per-round negotiation is needed, but $N$ appears in the formula itself, so every node must know $N$ in advance: if two nodes used different values of $N$ they would compute different $L_r$ and desynchronize. This is unlike \merw-UCB, whose UCB bonus depends only on the total-pull count $P$ as it is actually observed through the downlink, never on $N$ directly. In principle $N$ could be learned the same way the tree height $D$ is, by having the hub count distinct senders on an uplink and broadcast the result down; but $D$ is discovered as a free byproduct of the first ordinary cycle, whereas the very first $L_1$ is needed \emph{before} any uplink has happened, so learning $N$ this way would require a dedicated bootstrap cycle up front. We treat $N$ as known in advance and leave decentralized bootstrap for future work. The hub's decision rule computes global averages from the aggregate, eliminates arms falling below the current threshold $\epsilon_r$, and broadcasts the surviving set $S_r$ instead of a running statistic. The hub, not any other node, determines when to stop, once $|S_r|=1$, and this outcome is broadcast on the downlink like any other decision. Consequently \merw-BAI's round length $L_r + 2D$ shrinks across elimination rounds as $\epsilon_r$ tightens, unlike \merw-UCB's fixed $2D+1$.
+In BAI, given confidence $\delta$, the goal is to identify $a^\star = \arg\max_k \mu_k$ with probability $\geq 1-\delta$ using as few total pulls as possible. \merw-BAI adapts Hillel's Algorithm 3 \citep{hillel2013distributed} to the same generic protocol, run in elimination rounds $r = 1, 2, \ldots$ over a surviving arm set $S_r \subseteq \{1,\ldots,K\}$, initialized to $S_0 = \{1,\ldots,K\}$ and only shrinking. In round $r$, every agent $i$ pulls each arm $k \in S_{r-1}$ exactly $L_r = \lceil t_r - t_{r-1}\rceil$ times, where $t_r = \frac{2}{N\epsilon_r^2}\ln\frac{4Kr^2}{\delta}$ is Hillel's schedule and $\epsilon_r = 2^{-r}$ ($t_0 = 0$), and its local contribution is the vector of its own reward sums over that round, $b_i = (b_{i,k})_{k \in S_{r-1}}$. Every node computes $L_r$ independently from this formula, so no per-round negotiation is needed, but $N$ appears in the formula itself, so every node must know $N$ in advance: if two nodes used different values of $N$ they would compute different $L_r$ and desynchronize. This is unlike \merw-UCB, whose UCB bonus depends only on the total-pull count $P$ as it is actually observed through the downlink, never on $N$ directly. In principle $N$ could be learned the same way the tree height $D$ is, by having the hub count distinct senders on an uplink and broadcast the result down; but $D$ is discovered as a free byproduct of the first ordinary cycle, whereas the very first $L_1$ is needed \emph{before} any uplink has happened, so learning $N$ this way would require a dedicated bootstrap cycle up front. We treat $N$ as known in advance and leave decentralized bootstrap for future work. The hub sums the aggregate $B_k = \sum_i b_{i,k}$ into the empirical mean $\bar\mu_k = B_k / (N L_r)$ for each $k \in S_{r-1}$, eliminates every arm more than $\epsilon_r$ below the best empirical mean, $S_r = \{k \in S_{r-1} : \bar\mu_k \geq \max_{k'} \bar\mu_{k'} - \epsilon_r\}$, and broadcasts $S_r$ on the downlink instead of a running statistic like $(\hat n, \hat s, P)$. The hub, not any other node, determines when to stop, once $|S_r|=1$, and this outcome is broadcast on the downlink like any other decision. Consequently \merw-BAI's round length $L_r + 2D$ shrinks across elimination rounds as $\epsilon_r$ tightens, unlike \merw-UCB's fixed $2D+1$.
 
 \begin{corollary}[BAI sample complexity matches Hillel]
 \label{cor:bai}
@@ -455,7 +454,7 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
 \end{corollary}
 
 
-\begin{table}[tbp]
+\begin{table}[h]
 \caption{Function behavior across different algorithm instantiations.}
 \label{tab:instantiations}
 \small
@@ -467,12 +466,14 @@ The total number of arm pulls required by \merw-BAI to identify $a^\star$ with p
 % --- FIRST INSTANTIATION ---
 \textbf{\merw-UCB} & \textsc{Init} 			& pull each $k\in\{1,..,K\}$ once, $K$ rounds \\
 			       & \textsc{Local-Pull}    & UCB-maximizing arm, 1 round \\
+                   & \textsc{Uplink}        & per-arm pull counts and reward sums since last cycle, $(n_i,s_i)$ \\
                    & \textsc{Hub-Decide}    & UCB-pull on $B$; never stops early \\
                    & \textsc{Downlink}      & aggregate $(\hat n,\hat s,P)$ \\
 \midrule
 % --- SECOND INSTANTIATION ---
 \textbf{\merw-BAI} & \textsc{Init}       & $\sigma_i \leftarrow S_0$, 0 rounds \\
 			       & \textsc{Local-Pull} & every $k\in S_{r-1}$, $L_r$ times \\
+                   & \textsc{Uplink}     & per-arm reward sums over $S_{r-1}$ this round, $b_i$ \\
                    & \textsc{Hub-Decide} & eliminate below $\epsilon_r$; stop when $|S_r|{=}1$ \\
                    & \textsc{Downlink}   & surviving set $S_r$ \\
 \bottomrule
@@ -521,10 +522,12 @@ $\|E\|_2/\gamma = \sqrt{\deg(v)}/\gamma$, where $\gamma$ is the gap between the
 two largest eigenvalues of $\tilde A$, so the warm-started iteration reaches
 tolerance in $O(\log(N/\epsilon))$ rounds on an expander against
 $\tau_{\mathrm{init}}$ for a cold start (Proposition~\ref{prop:reelection}). The
-size of the perturbation is set by $\deg(v)$ alone: a low-degree node barely
-moves $\tilde\psi$, the hub moves it the most, and the whole cost tracks the
-spectral gap, so the well-connected regime of Section~\ref{sec:mdst-gap} is also
-the regime where re-election is cheap.
+perturbation norm $\|E\|_2$ is set by $\deg(v)$ alone, so it is largest when
+$v$ is the hub and smallest for a low-degree node; the actual movement of
+$\tilde\psi$ is only bounded by $\|E\|_2/\gamma$, not equal to it, but on a
+graph whose spectral gap does not itself collapse when $v$ is removed, this
+bound is what governs the cost, so the well-connected regime of
+Section~\ref{sec:mdst-gap} is also the regime where re-election is cheap.
 
 \subsection{Detecting the Failure and Restarting Together}
 \label{sec:sync}
@@ -615,12 +618,13 @@ near-bottleneck, where $\lambda_2$ is small, does not, since there removing a
 central node can swing centrality across the bottleneck and the warm start is a
 poor initializer.
 
-Hub removal is the worst case within any fixed graph, since the hub is the
-highest-degree, highest-centrality node and so gives the largest $\|E\| =
-\sqrt{\deg(h^\star)}$ and the largest movement of $\tilde\psi$. That re-election
-is nonetheless cheap even for the hub, on expanders, is the content of
-Proposition~\ref{prop:reelection}, and it is why we do not treat the hub
-separately: if the procedure is cheap in its worst case it is cheap everywhere.
+Hub removal is the worst case within any fixed graph by this bound, since the
+hub is the highest-degree node and so gives the largest $\|E\| =
+\sqrt{\deg(h^\star)}$, hence the largest bound on the movement of $\tilde\psi$.
+That re-election is nonetheless cheap even for the hub, on expanders, is the
+content of Proposition~\ref{prop:reelection}, and it is why we do not treat the
+hub separately: if the procedure is cheap in its worst case it is cheap
+everywhere.
 A low-degree, low-centrality node sits at the other end of the same spectrum. Its
 $\sqrt{\deg(v)}/\gamma$ is small and $E$ is supported on $v$ and its neighbors, so
 the leading eigenvector barely moves and only near $v$; the iteration reaches
@@ -628,6 +632,7 @@ tolerance in a handful of rounds and the elected hub is the same as before. The
 gradation from that case to hub removal is continuous in $\deg(v)$, with no
 qualitative break where a different mechanism would be needed.
 
+\iffalse
 \subsection{Recovery}
 
 So far we assumed a failed node stays down. The general version of \merwft
@@ -651,6 +656,7 @@ This works the same way even under repeated failure. If $v$ happens to
 reconnect through a node that was hub at some earlier point, or through one
 promoted since, nothing changes: recovery only needs $j$ to be live and attached,
 not any particular identity for $j$.
+\fi
 
 \subsection{Scope}
 \label{sec:ft-scope}
@@ -706,7 +712,7 @@ every failure is followed by a recovery within a handful of rounds, and the
 regret curve afterward grows at the same rate as before the failure, with
 no lasting penalty.
 
-\begin{figure}[tb]
+\begin{figure}[h]
     \centering
     \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T2000_at500-1000-1500.pdf}
     \caption{Group regret for \merwft on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) with the hub killed at $t=500,1000,1500$. Dashed lines mark failures, dotted lines mark recovery. All three failures are recovered from.}
