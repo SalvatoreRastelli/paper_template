@@ -117,7 +117,7 @@ def make_graph(graph_type, N, seed=None, p=None):
 # MERW eigenvector (power iteration on adjacency matrix)
 # ============================================================
 
-def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
+def merw_eigenvector(G, tau=None, gossip_rounds=None):
     """Distributed power iteration with gossip-based normalization.
 
     Implements Jelasity, Canright, Engo-Monsen (EuroPar 2007):
@@ -127,9 +127,19 @@ def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
         then gossips r_i by pairwise averaging for gossip_rounds rounds to approximate
         the global geometric mean growth rate. Each node divides w_i by exp(r_i).
       - No global norm or knowledge of N required.
+
+    Runs a FIXED tau rounds with no convergence test, so every node finishes on
+    the same synchronous round and enters max-flooding together (a convergence
+    test would be a global reduce and would desynchronize nodes at different
+    depths). Both tau (the tau_init hyperparameter) and gossip_rounds (g)
+    default to ceil(2 ln N), the protocol's O(log N) budgets.
     """
     N = G.number_of_nodes()
     A = nx.to_numpy_array(G)
+    if tau is None:
+        tau = int(np.ceil(2.0 * np.log(N)))
+    if gossip_rounds is None:
+        gossip_rounds = int(np.ceil(2.0 * np.log(N)))
 
     w = np.ones(N)
     log_growth = np.zeros(N)
@@ -150,10 +160,6 @@ def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
                     r[i] = r[j] = (r[i] + r[j]) / 2
 
         w = w_new / np.exp(r)
-
-        diff = np.max(np.abs(w - w_old) / (np.abs(w_old) + 1e-15))
-        if diff < tol:
-            break
 
     w = np.abs(w)
     lam = np.exp(np.mean(log_growth))
@@ -330,7 +336,7 @@ def run_coop_ucb2(env, T, G, N, sigma=1.0, gamma=2.0, eta=0.5):
 # Algorithm: EigenTreeUCB (localonly relay -- hub sends only D, not state)
 # ============================================================
 
-def run_merw_ucb(env, T, G, N, c=2.0, sigma=1.0, tau_init=200):
+def run_merw_ucb(env, T, G, N, c=2.0, sigma=1.0, tau_init=None):
     """
     EigenTreeUCB with hub-only commit and D-only downlink.
 
@@ -548,7 +554,7 @@ def run_hillel(env, T, G, N, delta=0.05, sigma=1.0):
     Communication is via the MERW hub (highest psi node) acting as coordinator.
     """
     K = env.K
-    psi, _ = merw_eigenvector(G, tau=200)
+    psi, _ = merw_eigenvector(G)
     hub = int(np.argmax(psi))
 
     # Number of elimination rounds: ceil(log2(K))
@@ -700,7 +706,7 @@ def bai_merw(env, G, N, delta=0.05, sigma=1.0, c=2.0):
     epsilon_r = 2^{-r},  t_0 = 0.
     """
     K = env.K
-    psi, _ = merw_eigenvector(G, tau=200)
+    psi, _ = merw_eigenvector(G)
     hub, parent, children, depth, tree_depth = build_routing_tree(G, psi)
 
     surviving = list(range(K))
@@ -788,7 +794,7 @@ def _worker(task):
     else:
         raise ValueError(algo_name)
 
-    psi, _ = merw_eigenvector(G, tau=200)
+    psi, _ = merw_eigenvector(G)
     hub, _, _, depth, _ = build_routing_tree(G, psi)
     return algo_name, cr.sum(axis=0), cr[hub]
 
@@ -904,7 +910,7 @@ def _worker_nu(task):
     G = make_graph(graph_type, N, seed=graph_seed)
     env = BanditEnv(means, sigma=sigma)
     cr = run_merw_ucb(env, T, G, N, c=c, sigma=sigma, boost_type="D2", nu=nu)
-    psi, _ = merw_eigenvector(G, tau=200)
+    psi, _ = merw_eigenvector(G)
     hub = int(np.argmax(psi))
     return label, cr.sum(axis=0), cr[hub]
 

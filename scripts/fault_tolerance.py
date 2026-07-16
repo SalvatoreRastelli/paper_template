@@ -102,8 +102,28 @@ def make_graph(graph_type, N, p=None, seed=None):
 # ============================================================
 # MERW eigenvector and routing tree (same as regret_min.py)
 # ============================================================
+#
+# The two decentralized budgets are both ceil(2 ln N), matching the protocol's
+# O(log N) spec (paper: g = O(log N) gossip rounds per power-iteration step,
+# and a fixed tau_init large enough for the routing decision to settle). They
+# are shared hyperparameters fixed in advance, not quantities any node derives
+# at runtime, so every node uses the same value and stays synchronized; N is
+# treated as known in advance, as elsewhere. The constant 2 is chosen so the
+# elected hub matches a fully-converged reference on ER and BA graphs across
+# N=20..200 in 78/80 trials (coefficient 1 gives 76/80, coefficient 3 gives
+# 80/80; 2 is the point past which more rounds buy little extra accuracy).
 
-def gossip_power_iteration(G, w0, tau=500, tol=1e-8, gossip_rounds=100):
+def gossip_rounds_for(N):
+    """g = ceil(2 ln N): the O(log N) gossip rounds per power-iteration step."""
+    return int(np.ceil(2.0 * np.log(N)))
+
+
+def tau_init_for(N):
+    """tau_init = ceil(2 ln N): the fixed O(log N) power-iteration budget."""
+    return int(np.ceil(2.0 * np.log(N)))
+
+
+def gossip_power_iteration(G, w0, tau, tol=None, gossip_rounds=None):
     """
     Decentralized power iteration with gossip-based normalization, the single
     primitive used both for the initial centrality and for fault-tolerant
@@ -114,14 +134,28 @@ def gossip_power_iteration(G, w0, tau=500, tol=1e-8, gossip_rounds=100):
     step is a final cosmetic rescale by the max, applied once after the loop,
     outside the decentralized iteration.
 
+    Two modes, set by `tol`:
+      tol is None (the protocol): run exactly `tau` rounds with NO convergence
+        test. This is what the synchronous protocol requires -- every node
+        performs the same fixed number of steps, so all nodes finish on the
+        same round and enter the first bandit pull together. A convergence
+        test would be a global reduce and would let nodes at different depths
+        stop at different rounds, breaking synchronization.
+      tol is a float (measurement only): stop early when the per-node relative
+        change falls below tol, and report the round it happened. Used by the
+        convergence-timing experiment, not by the protocol itself.
+
     Runs on the graph G as given; to iterate on a surviving subgraph after a
     node failure, pass the subgraph induced on the live nodes and a w0 that is
     the pre-failure state restricted to those nodes (warm start). Returns
-    (w, rounds), where `rounds` is the number of iterations until the local
-    convergence criterion was met, or `tau` if it never converged.
+    (w, rounds), where `rounds` is `tau` in fixed-round mode, or the stopping
+    round in measurement mode. `gossip_rounds` defaults to ceil(ln N), the
+    protocol's O(log N) gossip budget, when not given.
     """
     N = G.number_of_nodes()
     A = nx.to_numpy_array(G)
+    if gossip_rounds is None:
+        gossip_rounds = gossip_rounds_for(N)
 
     w = w0.astype(float).copy()
     rounds = tau
@@ -142,20 +176,28 @@ def gossip_power_iteration(G, w0, tau=500, tol=1e-8, gossip_rounds=100):
 
         w = w_new / np.exp(r)
 
-        diff = np.max(np.abs(w - w_old) / (np.abs(w_old) + 1e-15))
-        if diff < tol:
-            rounds = t + 1
-            break
+        if tol is not None:
+            diff = np.max(np.abs(w - w_old) / (np.abs(w_old) + 1e-15))
+            if diff < tol:
+                rounds = t + 1
+                break
 
     w = np.abs(w)
     w /= w.max()
     return w, rounds
 
 
-def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
-    """Initial centrality: cold-start (w_i = 1) gossip power iteration."""
+def merw_eigenvector(G, tau=None, gossip_rounds=None):
+    """
+    Initial centrality: cold-start (w_i = 1) gossip power iteration, run for a
+    fixed `tau` rounds with no convergence test, so every node finishes on the
+    same synchronous round. `tau` is the protocol's tau_init hyperparameter and
+    defaults to ceil(ln N); `gossip_rounds` defaults to ceil(ln N) as well.
+    """
     N = G.number_of_nodes()
-    w, _ = gossip_power_iteration(G, np.ones(N), tau=tau, tol=tol,
+    if tau is None:
+        tau = tau_init_for(N)
+    w, _ = gossip_power_iteration(G, np.ones(N), tau=tau, tol=None,
                                   gossip_rounds=gossip_rounds)
     return w
 
@@ -244,7 +286,7 @@ def warm_started_reelection(G, psi, dead, tau_re):
     G_sub = nx.convert_node_labels_to_integers(G_sub, ordering="sorted")
 
     w0 = psi[alive].copy()
-    w, _ = gossip_power_iteration(G_sub, w0, tau=tau_re, tol=0.0)
+    w, _ = gossip_power_iteration(G_sub, w0, tau=tau_re, tol=None)
 
     psi_new = np.full(N, -1.0)
     for k, node in enumerate(alive):
@@ -316,7 +358,7 @@ def _validate_tree(root, parent, children, depth, live_nodes):
 # EigenTree-FT: relay with one injected hub failure
 # ============================================================
 
-def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
+def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=None,
                      tau_re=None, enable_failover=True):
     """
     Runs the EigenTreeUCB relay cycle (fixed cycle length 2D+1, synchronized
@@ -356,10 +398,12 @@ def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
                 of the structural-validity check dict after each re-election)
     """
     K = env.K
+    if tau_init is None:
+        tau_init = tau_init_for(N)
     psi = merw_eigenvector(G, tau=tau_init)
     hub0, parent, children, depth, D = build_routing_tree(G, psi)
     if tau_re is None:
-        tau_re = int(np.ceil(np.log(N)))
+        tau_re = tau_init_for(N)
 
     fail_schedule = sorted(set([t_fail] if isinstance(t_fail, int) else t_fail))
 

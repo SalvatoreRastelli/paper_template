@@ -96,8 +96,8 @@ way, a communication structure according to the eigenvector centrality induced
 by $G$.
 
 In \merw, a coordinator \emph{emerges} from the graph structure, identified
-from purely local computation, with no agent ever seeing the global topology or
-knowing $N$ in advance. The key idea is that eigenvector centrality, computed
+from purely local computation, with no agent ever seeing the global topology.
+The key idea is that eigenvector centrality, computed
 via a fully decentralized gossip protocol \citep{jelasity2007asynchronous},
 can be used to identify a ``most central'' node in $G$. One can then construct
 a routing tree which spans $G$ via max-flooding, again only using local
@@ -135,7 +135,7 @@ Section~\ref{sec:mdst-gap}.
 \paragraph{Contributions.} (1) A fully decentralized protocol for building a
 centralized communication structure: the hub and tree emerge from local
 computations, requiring no privileged node, no global communication, and no
-prior knowledge of $N$ or the graph structure. (2) A proof that this emergent
+prior knowledge of the graph structure. (2) A proof that this emergent
 coordinator is statistically sufficient for any decision rule depending only on
 globally aggregated statistics, instantiated for regret minimization and best
 arm identification, both matching centralized performance up to an $O(D)$
@@ -167,7 +167,8 @@ information-theoretic argument we use to justify it (Sec.~\ref{sec:merw}).
 Computing it exactly requires solving the graph's eigenvalue problem;
 \cite{jelasity2007asynchronous} give a gossip-based normalization for
 distributed power iteration that avoids a global all-reduce, which we use
-directly so no agent ever needs to know $N$.
+directly, with both the fixed iteration count and the gossip-round count set
+to $O(\log N)$.
 
 \paragraph{Leader election and fault tolerance.} Classical leader election,
 Bully \citep{garciamolina1982} and ring-based extrema-finding
@@ -224,16 +225,16 @@ neighbor and form the unnormalized update $\tilde w_i = \sum_{j\sim i} w_j$;
 $r_i$ with random neighbors for $O(\log N)$ gossip rounds, so that every $r_i$
 converges to the same network-wide estimate of $\log\lambda_1$ without any node
 ever summing over all of $N$; (4) normalize locally, $w_i \leftarrow \tilde
-w_i/\exp(r_i)$. This runs for a fixed hyperparameter number of iterations
-$\tau_{\mathrm{init}}$, so all agents finish on the same round and begin
-max-flooding together, with no agent evaluating a global convergence test.
-This gossip step replaces the single global $\ell_2$-norm
-renormalization an ordinary (non-distributed) power iteration would need, at
-the cost of the extra gossip rounds. Importantly, only the \emph{ratio}
-$\psi_j/\psi_i$ is needed for routing: agent $i$ simply checks which neighbor's
-value is larger. Thus, the common unknown scale $\tilde\psi_i \approx
-c\cdot\psi_i$ left behind by this normalization is never resolved and never
-needs to be: no agent ever learns $N$ or $c$.
+w_i/\exp(r_i)$. This runs for a fixed number of iterations $\tau_{\mathrm{init}}
+= O(\log N)$, so all agents finish on the same round and begin max-flooding
+together, with no agent evaluating a global convergence test. This gossip step
+replaces the single global $\ell_2$-norm renormalization an ordinary
+(non-distributed) power iteration would need, at the cost of the extra gossip
+rounds. Importantly, only the \emph{ratio} $\psi_j/\psi_i$ is needed for
+routing: agent $i$ simply checks which neighbor's value is larger. Thus, the
+common unknown scale $\tilde\psi_i \approx c\cdot\psi_i$ left behind by this
+normalization is never resolved and never needs to be: no agent ever learns
+$c$.
 
 After power iteration, a short \emph{max-flooding} phase merges any local
 maxima of $\tilde\psi$ into a single spanning tree. Each agent $i$ keeps a
@@ -458,18 +459,12 @@ times, where $t_r = \frac{2}{N\epsilon_r^2}\ln\frac{4Kr^2}{\delta}$ is their
 elimination schedule and $\epsilon_r = 2^{-r}$ ($t_0 = 0$), and its local
 contribution is the vector of its own reward sums over that round,
 $b_i = (b_{i,k})_{k \in S_{r-1}}$. Every node computes $L_r$ independently
-from this formula, so no per-round negotiation is needed, but $N$ appears in
-the formula itself, so every node must know $N$ in advance: if two nodes used
-different values of $N$ they would compute different $L_r$ and desynchronize.
-This is unlike \merw-UCB, whose UCB bonus depends only on the total-pull
-count $P$ as it is actually observed through the downlink, never on $N$
-directly. In principle $N$ could be learned the same way the tree height $D$
-is, by having the hub count distinct senders on an uplink and broadcast the
-result down; but $D$ is discovered as a free byproduct of the first ordinary
-cycle, whereas the very first $L_1$ is needed \emph{before} any uplink has
-happened, so learning $N$ this way would require a dedicated bootstrap cycle
-up front. We treat $N$ as known in advance and leave decentralized bootstrap
-for future work. The hub sums the aggregate $B_k = \sum_i b_{i,k}$ into the
+from this formula using the shared, known $N$, so no per-round negotiation is
+needed, and every node computes the same $L_r$. This is unlike \merw-UCB,
+whose UCB bonus depends only on the total-pull count $P$ as it is actually
+observed through the downlink, never on $N$ directly: BAI needs $N$ to compute
+the very first $L_1$, before any uplink has happened, while UCB never needs it
+at all. The hub sums the aggregate $B_k = \sum_i b_{i,k}$ into the
 empirical mean $\bar\mu_k = B_k / (N L_r)$ for each $k \in S_{r-1}$, eliminates
 every arm more than $\epsilon_r$ below the best empirical mean,
 $S_r = \{k \in S_{r-1} : \bar\mu_k \geq \max_{k'} \bar\mu_{k'} - \epsilon_r\}$,
@@ -697,10 +692,10 @@ sparser graphs and other random graph models is left for future work.
 The graph must be connected and undirected, and stays that way except for
 the node failures \merwft handles. $D$ can be large on sparse or path-like
 graphs; this is exactly the regime Section~\ref{sec:mdst-gap} identifies.
-BAI needs agents to know $N$ in advance, to compute the elimination schedule
-of \citet{hillel2013distributed}; regret minimization needs no such thing,
-since it learns everything from
-the protocol itself. \merwft only covers fail-stop failures: a node works
+BAI needs $N$ inside the elimination schedule of \citet{hillel2013distributed}
+itself, before the very first round; regret minimization only needs $N$ to set
+$\tau_{\mathrm{init}}$ and the gossip-round count during setup, never again
+afterward. \merwft only covers fail-stop failures: a node works
 correctly, goes silent, or comes back and rejoins through the recovery
 mechanism of Section~\ref{sec:ft}. It has no mechanism for a node that stays
 active but sends incorrect messages, and none for two nodes failing within the

@@ -1,2 +1,2 @@
 fail_schedule,recovery_rounds,hub0,D0,all_trees_valid
-500;1000;1500,516;1018;1522,6,2,True
+500;1000;1500,523;1027;1523,10,2,True

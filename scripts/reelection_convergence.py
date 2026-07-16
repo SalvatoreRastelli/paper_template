@@ -52,7 +52,6 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
 # so this experiment measures the same primitive the protocol actually runs.
 from fault_tolerance import (
     make_er_graph,
-    merw_eigenvector,
     gossip_power_iteration,
     build_routing_tree,
 )
@@ -133,12 +132,16 @@ def _run_trial(trial, p, tau_max, tol, gossip_rounds, tau_init):
     family, N, graph_idx, graph_seed, run_seed = trial
     G = make_family_graph(family, N, p, graph_seed)
 
-    # Initial centrality (cold, full graph) and its hub, computed once with the
-    # protocol's own initialization. Seed numpy's global RNG per trial so the
-    # gossip iteration's random neighbor choices are reproducible regardless of
-    # which worker or in what order this trial runs.
+    # Initial (pre-failure) centrality and hub. This is the warm-start vector
+    # the survivors will resume from, so unlike the protocol's own fixed-round
+    # tau_init, we run it to full convergence here (tol-based) to get the true
+    # psi rather than an approximation -- otherwise the "warm start" would be
+    # warm-started from noise. Seed numpy's global RNG per trial so the gossip
+    # iteration's random neighbor choices are reproducible regardless of which
+    # worker or in what order this trial runs.
     np.random.seed(run_seed)
-    psi = merw_eigenvector(G, tau=tau_init, tol=tol, gossip_rounds=gossip_rounds)
+    psi, _ = gossip_power_iteration(G, np.ones(N), tau=tau_init, tol=tol,
+                                    gossip_rounds=gossip_rounds)
     hub, _, _, _, _ = build_routing_tree(G, psi)
 
     G_sub, alive = _survivor_subgraph(G, hub)

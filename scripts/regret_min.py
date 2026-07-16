@@ -187,7 +187,7 @@ def make_graph(graph_type, N, seed=None, p=None):
 # MERW eigenvector
 # ============================================================
 
-def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
+def merw_eigenvector(G, tau=None, gossip_rounds=None):
     """Distributed power iteration with gossip-based normalization.
 
     Implements Jelasity, Canright, Engo-Monsen (EuroPar 2007):
@@ -197,9 +197,19 @@ def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
         then gossips r_i by pairwise averaging for gossip_rounds rounds to approximate
         the global geometric mean growth rate. Each node divides w_i by exp(r_i).
       - No global norm or knowledge of N required.
+
+    Runs a FIXED tau rounds with no convergence test, so every node finishes on
+    the same synchronous round and enters max-flooding together (a convergence
+    test would be a global reduce and would desynchronize nodes at different
+    depths). Both tau (the tau_init hyperparameter) and gossip_rounds (g)
+    default to ceil(2 ln N), the protocol's O(log N) budgets.
     """
     N = G.number_of_nodes()
     A = nx.to_numpy_array(G)
+    if tau is None:
+        tau = int(np.ceil(2.0 * np.log(N)))
+    if gossip_rounds is None:
+        gossip_rounds = int(np.ceil(2.0 * np.log(N)))
 
     w = np.ones(N)
     log_growth = np.zeros(N)
@@ -220,10 +230,6 @@ def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
                     r[i] = r[j] = (r[i] + r[j]) / 2
 
         w = w_new / np.exp(r)
-
-        diff = np.max(np.abs(w - w_old) / (np.abs(w_old) + 1e-15))
-        if diff < tol:
-            break
 
     w = np.abs(w)
     lam = np.exp(np.mean(log_growth))
@@ -330,7 +336,7 @@ def build_routing_tree(G, psi):
 # EigenTreeUCB
 # ============================================================
 
-def run_merw_ucb_relay(env, T, G, N, c=2.0, sigma=1.0, tau_init=200):
+def run_merw_ucb_relay(env, T, G, N, c=2.0, sigma=1.0, tau_init=None):
     """
     EigenTreeUCB: one independent relay cycle per local-maximum hub.
 
@@ -539,7 +545,7 @@ def run_merw_ucb_relay(env, T, G, N, c=2.0, sigma=1.0, tau_init=200):
     return cum_regret, np.cumsum(pulls_per_round)
 
 
-def run_merw_ucb_relay_localonly(env, T, G, N, c=2.0, sigma=1.0, tau_init=200):
+def run_merw_ucb_relay_localonly(env, T, G, N, c=2.0, sigma=1.0, tau_init=None):
     """
     EigenTreeUCB (local-only variant): hub sends only D back, not (n_hat, s_hat).
 
@@ -997,7 +1003,7 @@ def _worker(task):
     G = make_graph(graph_type, N, seed=graph_seed, p=p)
     env = BanditEnv(means, sigma=sigma)
 
-    psi, _ = merw_eigenvector(G, tau=200)
+    psi, _ = merw_eigenvector(G)
     _, hubs, _, _, _, _, _ = build_routing_tree(G, psi)
     hub = hubs[0]
 
