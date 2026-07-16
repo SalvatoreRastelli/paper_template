@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(pdflatex -interaction=nonstopmode main.tex)",
+      "Bash(bibtex main *)",
+      "Bash(echo \"exit $?\")",
+      "Read(//private/tmp/**)",
+      "Bash(awk '/^\\\\\\\\section\\\\{Fault Tolerance\\\\}/{s=NR} /^\\\\\\\\section\\\\{Experiments\\\\}/{print s\"-\"NR; exit}' main.tex)",
+      "Bash(python3 linters/lint_algorithms.py paper/aaai/main.tex)",
+      "Bash(echo \"aaai EXIT: $?\")"
     ]
   }
 }

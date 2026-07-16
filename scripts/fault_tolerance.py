@@ -1,16 +1,27 @@
 """
-EigenTree-FT: hub-failure injection and recovery, on top of the EigenTreeUCB relay.
+EigenTree-FT: hub-failure injection and spectral re-election, on top of the
+EigenTreeUCB relay.
 
-Simulates one run of EigenTreeUCB with a single permanent hub failure injected
-at a fixed round t_fail. The hub's designated backup (its highest-psi direct
-child) detects the failure via timeout, self-promotes, floods a promotion
-message over graph edges (not tree edges) to notify its former siblings, and
-resumes the relay protocol as the new hub. Group regret is tracked throughout
-so the recovery can be seen directly in the regret curve, and compared against
-a no-failover baseline where the network never recovers after the hub dies.
+Simulates one run of EigenTreeUCB with permanent hub failures injected at fixed
+rounds. Recovery follows the single re-election procedure of the Fault
+Tolerance section, applied uniformly regardless of which node failed: a dead
+node is a low-rank perturbation of the adjacency matrix, so the survivors
+warm-start a gossip power iteration on A restricted to the surviving subgraph
+from the pre-failure psi, run it for a fixed tau_re rounds, and the argmax
+survivor becomes the new hub. The tree is then rebuilt from scratch around the
+new hub by the same max-flooding used at initialization, so its height falls
+out of the first post-failure cycle exactly as D did at the start. Detection
+uses one uniform timer tau = 2D+1 (the cycle length) for every node -- the hub
+is detected by its children exactly as any node is detected by its parent --
+and the failure notice reaches every survivor within 2D hops, which is also
+the budget used here for the transient before the new hub resumes ordinary
+cycling. No backup is designated and no swap edges are precomputed: hub
+failure is simply the largest-perturbation case of the one procedure that
+handles every node failure. Group regret is tracked throughout so recovery
+shows directly in the curve.
 
 Usage:
-    python fault_tolerance.py --graph ba --N 20 --K 5 --T 5000 --t-fail 2000 --mode all
+    python fault_tolerance.py --graph ba --N 20 --K 5 --T 5000 --fail-at 2000 --mode all
 """
 
 import argparse
@@ -125,19 +136,28 @@ def merw_eigenvector(G, tau=500, tol=1e-8, gossip_rounds=100):
     return w
 
 
-def build_routing_tree(G, psi):
+def build_routing_tree(G, psi, dead=None):
+    """
+    Max-flooding routing tree induced by centrality psi, exactly the
+    construction used at initialization. If `dead` is given, the tree is
+    built over the surviving subgraph G \\ {dead}: dead nodes are skipped
+    entirely (no parent, no children, depth -1), so calling this again after
+    a failure with the re-elected psi is literally the same procedure run
+    once more, over fewer nodes.
+    """
     N = G.number_of_nodes()
+    alive = [i for i in range(N) if dead is None or not dead[i]]
 
     parent = np.full(N, -1, dtype=int)
-    for i in range(N):
-        nbrs = list(G.neighbors(i))
+    for i in alive:
+        nbrs = [j for j in G.neighbors(i) if dead is None or not dead[j]]
         if not nbrs:
             continue
         best_j = max(nbrs, key=lambda j: psi[j])
         if psi[best_j] > psi[i]:
             parent[i] = best_j
 
-    local_maxima = [i for i in range(N) if parent[i] < 0]
+    local_maxima = [i for i in alive if parent[i] < 0]
 
     m   = psi.copy()
     via = np.arange(N)
@@ -145,8 +165,10 @@ def build_routing_tree(G, psi):
         m_new   = m.copy()
         via_new = via.copy()
         changed = False
-        for i in range(N):
+        for i in alive:
             for j in G.neighbors(i):
+                if dead is not None and dead[j]:
+                    continue
                 if m[j] > m_new[i]:
                     m_new[i]   = m[j]
                     via_new[i] = j
@@ -160,10 +182,10 @@ def build_routing_tree(G, psi):
         if m[via[i]] > psi[i]:
             parent[i] = via[i]
 
-    hub = next(i for i in range(N) if parent[i] < 0)
+    hub = next(i for i in alive if parent[i] < 0)
 
     children = [[] for _ in range(N)]
-    for i in range(N):
+    for i in alive:
         if parent[i] >= 0:
             children[parent[i]].append(i)
 
@@ -176,14 +198,41 @@ def build_routing_tree(G, psi):
             depth[c] = depth[node] + 1
             queue.append(c)
 
-    tree_depth = int(depth.max())
+    tree_depth = int(depth[alive].max())
     return hub, parent, children, depth, tree_depth
+
+
+def warm_started_reelection(G, psi, dead, tau_re):
+    """
+    Warm-started power iteration on A restricted to the surviving subgraph,
+    starting from the pre-failure psi (Proposition: Warm-started
+    re-election). Dead nodes are dropped from the state entirely rather than
+    zeroed in place, so the iteration is exactly power iteration on the
+    smaller adjacency matrix A_tilde, not on A with a masked row/column.
+    Runs a fixed tau_re rounds (no convergence check), matching the
+    protocol's fixed re-election budget, and returns a full-length psi_new
+    array with -1 at dead positions.
+    """
+    N = G.number_of_nodes()
+    alive = [i for i in range(N) if not dead[i]]
+    idx = {node: k for k, node in enumerate(alive)}
+    A_tilde = nx.to_numpy_array(G, nodelist=alive)
+
+    w = psi[alive].copy()
+    for _ in range(tau_re):
+        w = A_tilde @ w
+        w = w / w.max()
+
+    psi_new = np.full(N, -1.0)
+    for k, node in enumerate(alive):
+        psi_new[node] = w[k]
+    return psi_new
 
 
 def _validate_tree(root, parent, children, depth, live_nodes):
     """
-    Direct empirical check of the Failover correctness proposition: after
-    promotion, the network must form a single valid spanning tree rooted at
+    Direct empirical check that the routing tree stays well-formed: after
+    re-election, the network must form a single valid spanning tree rooted at
     the new hub, with every live node reachable and no cycles.
 
     Returns a dict of individual checks plus an overall boolean.
@@ -245,36 +294,49 @@ def _validate_tree(root, parent, children, depth, live_nodes):
 # ============================================================
 
 def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
-                     enable_failover=True):
+                     tau_re=None, enable_failover=True):
     """
     Runs the EigenTreeUCB relay cycle (fixed cycle length 2D+1, synchronized
     rounds) with permanent hub failures injected at every round in t_fail
     (an int for a single failure, or a list/tuple for several sequential
     failures).
 
-    If enable_failover is True, the highest-psi direct child of the hub is
-    the designated backup. Upon detecting hub silence (no downlink within the
-    expected window), it self-promotes, floods a promotion message over graph
-    edges to its former siblings (who re-route through it), and resumes the
-    relay as the new hub, using its last-known mirrored state. Immediately
-    after promotion, the new hub selects its OWN backup from its own
-    children (the paper's recursive-backup rule), so the network can survive
-    any number of sequential hub failures, one at a time.
+    If enable_failover is True, recovery is the single re-election procedure
+    of the Fault Tolerance section, applied to the hub exactly as it would be
+    applied to any node: there is no designated backup and nothing is
+    precomputed in advance. Detection uses one uniform timer tau = 2D+1 (the
+    cycle length) -- the hub's children detect its silence the same way any
+    node detects a dead neighbor, by a missing expected message within tau.
+    Once detected, survivors warm-start a gossip power iteration on A
+    restricted to the surviving subgraph, seeded from the pre-failure psi, for
+    a fixed tau_re rounds (Proposition: Warm-started re-election); the argmax
+    survivor becomes the new hub. The tree is then rebuilt from scratch by the
+    same max-flooding used at initialization, over the surviving subgraph, so
+    its height falls out of the rebuild rather than being carried over from
+    the old tree. The transient charged before the new hub resumes ordinary
+    cycling is 2D (the failure-notice horizon, Proposition: Failure horizon)
+    plus tau_re (re-election) plus the rebuild, which is bounded by twice the
+    new tree's height. Global aggregate state is not mirrored anywhere: the
+    first uplink after the rebuild re-sums every survivor's own cumulative
+    counters, recovering the exact pre-failure total minus the dead node's
+    own contribution.
 
     If enable_failover is False, the hub simply stays dead forever after the
     first failure in t_fail (no recovery mechanism) -- this isolates what
-    the failover mechanism buys you.
+    re-election buys you.
 
     Returns:
         cum_regret: (N, T) array of per-agent cumulative regret
         events: dict with 'hub_history' (hub id per round), 'recovery_rounds'
                 (list of rounds at which a new hub resumed normal cycling,
-                one per successful failover), and 'tree_valid_checks' (list
-                of the structural-validity check dict after each failover)
+                one per successful re-election), and 'tree_valid_checks' (list
+                of the structural-validity check dict after each re-election)
     """
     K = env.K
     psi = merw_eigenvector(G, tau=tau_init)
     hub0, parent, children, depth, D = build_routing_tree(G, psi)
+    if tau_re is None:
+        tau_re = int(np.ceil(np.log(N)))
 
     fail_schedule = sorted(set([t_fail] if isinstance(t_fail, int) else t_fail))
 
@@ -303,16 +365,12 @@ def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
     current_children = [list(c) for c in children]
     current_depth = depth.copy()
     current_D = D
+    current_psi = psi.copy()
     dead = np.zeros(N, dtype=bool)
     recovery_rounds = []
-    failover_in_progress = False
+    reelection_in_progress = False
     tree_valid_checks = []
-    trees_snapshot = []  # (label, hub, parent, children) before/after each failover
-
-    # Backup is announced once in the first downlink after the hub learns its
-    # children (matches the paper). After each promotion the new hub picks
-    # its own backup the same way (recursive backup selection).
-    backup = max(current_children[hub0], key=lambda j: psi[j]) if current_children[hub0] else None
+    trees_snapshot = []  # (label, hub, parent, children) before/after each re-election
 
     def _record(i, arm, t):
         cum_regret[i, t] = (cum_regret[i, t - 1] if t > 0 else 0.0) + env.gap(arm)
@@ -334,83 +392,24 @@ def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
             trees_snapshot.append({"label": "before", "hub": current_hub,
                                    "parent": current_parent.copy()})
 
-        # Detection: the backup only notices the hub is gone once an
-        # expected downlink fails to arrive -- i.e. once a full cycle
-        # (2*current_D + 1 rounds) has elapsed since the hub died without a
-        # downlink reaching it. Before that, the backup (like everyone else)
-        # is still silently waiting on the current cycle, so failover cannot
-        # start immediately at the round of death.
+        # Detection: the uniform timer tau = 2D+1 is the cycle length, so the
+        # hub's children -- one hop away, expecting the first downlink hop --
+        # notice the missing message within one cycle of the death. This is
+        # the same timer every node runs against every neighbor; the hub is
+        # not a distinguished case.
         detected = (dead[current_hub] and death_time is not None
                     and t - death_time >= 2 * current_D + 1)
 
-        if detected and enable_failover and not failover_in_progress and backup is not None and not dead[backup]:
-            # --- Failover: backup detects silence and promotes itself ---
-            failover_in_progress = True
+        if detected and enable_failover and not reelection_in_progress:
+            # --- Re-election: survivors warm-start on A restricted to the
+            # surviving subgraph and rebuild the tree around the new argmax ---
+            reelection_in_progress = True
 
-            # (1) Self-promotion: backup becomes new hub, using its
-            # mirrored (n_hat, s_hat) state -- last full downlink it received.
-            new_hub = backup
-            former_siblings = [j for j in current_children[current_hub] if j != backup]
+            D_before = current_D  # height the network had prior to this failure
 
-            # (2) Flood promotion message over GRAPH edges (not tree edges)
-            # to former siblings: each sibling re-routes via the actual
-            # shortest path in G \ {old hub}, not a direct hop to the backup
-            # (the paper's Failover correctness proposition routes each
-            # sibling through whichever path actually connects it).
-            G_minus_hub = G.copy()
-            G_minus_hub.remove_node(current_hub)
-            reroute_path = {}  # sibling -> shortest path (list of nodes) from new_hub
-            for s in former_siblings:
-                try:
-                    reroute_path[s] = nx.shortest_path(G_minus_hub, new_hub, s)
-                except nx.NetworkXNoPath:
-                    # Would violate 2-connectivity; shouldn't happen on the
-                    # graphs used here, but guard against it defensively.
-                    reroute_path[s] = [new_hub, s]
-
-            # (3) Rebuild the tree: new_hub at depth 0, its own subtree
-            # shifts up by one. Each former sibling re-attaches one hop at a
-            # time along its actual shortest path to new_hub; intermediate
-            # nodes on that path become real relay hops in the new tree,
-            # not a same-depth shortcut.
-            new_parent = current_parent.copy()
-            new_children = [list(c) for c in current_children]
-
-            new_parent[new_hub] = -1
-            new_children[current_hub].remove(new_hub)
-            for s in former_siblings:
-                path = reroute_path[s]  # [new_hub, ..., s]
-                for u, v in zip(path[:-1], path[1:]):
-                    if new_parent[v] != u:
-                        # detach v from wherever it used to route and
-                        # re-attach it one hop closer to new_hub
-                        old_p = new_parent[v]
-                        if old_p >= 0 and v in new_children[old_p]:
-                            new_children[old_p].remove(v)
-                        new_parent[v] = u
-                        new_children[u].append(v)
-
-            # Recompute depths from new_hub via BFS on the (now possibly
-            # disconnected-from-old-hub) tree.
-            new_depth = np.full(N, -1, dtype=int)
-            new_depth[new_hub] = 0
-            queue = [new_hub]
-            while queue:
-                node = queue.pop(0)
-                for child in new_children[node]:
-                    new_depth[child] = new_depth[node] + 1
-                    queue.append(child)
-            new_D = int(new_depth[new_depth >= 0].max())
-
-            # Sibling subtrees are held with a Hold signal (no spurious
-            # non-hub failovers) until the flood reaches them; we model this
-            # as those nodes going silent until the flood (their own new
-            # depth, one round per hop) reaches them, rather than
-            # simulating the Hold packets individually.
-            hold_until = np.zeros(N, dtype=int)
-            for i in range(N):
-                if i != new_hub and new_depth[i] >= 0:
-                    hold_until[i] = t + int(new_depth[i])
+            psi_new = warm_started_reelection(G, current_psi, dead, tau_re)
+            new_hub, new_parent, new_children, new_depth, new_D = \
+                build_routing_tree(G, psi_new, dead=dead)
 
             tree_valid = _validate_tree(new_hub, new_parent, new_children, new_depth,
                                         [i for i in range(N) if not dead[i]])
@@ -423,15 +422,34 @@ def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
             current_children = new_children
             current_depth = new_depth
             current_D = new_D
-            cycle_start = t + max(hold_until.max() - t, 0) + 1
-            failover_in_progress = False
-            recovery_rounds.append(cycle_start)
+            current_psi = psi_new
 
-            # Recursive backup selection: the newly-promoted hub picks its
-            # own highest-psi direct child as its own backup, so a later
-            # failure of new_hub can be tolerated the same way.
-            backup = (max(current_children[new_hub], key=lambda j: psi[j])
-                     if current_children[new_hub] else None)
+            # No backup, nothing is mirrored: the first uplink after the
+            # rebuild re-sums every survivor's own (n_own, s_own) counters
+            # from scratch, recovering the exact pre-failure aggregate minus
+            # the dead node's own contribution. Seed n_hat/s_hat at the new
+            # hub to that fresh sum right away, rather than waiting a full
+            # uplink, so the transient below models only the detection +
+            # re-election + rebuild delay, not bandit-state staleness on top
+            # of it.
+            live = [i for i in range(N) if not dead[i]]
+            n_hat[new_hub] = sum(n_own[i] for i in live)
+            s_hat[new_hub] = sum(s_own[i] for i in live)
+            n_own_synced[live] = n_own[live]
+            s_own_synced[live] = s_own[live]
+
+            # Transient: 2D (failure-notice horizon, using the height the
+            # network had before this failure) for every survivor to learn of
+            # the failure and restart in step, plus tau_re rounds of
+            # warm-started re-election, plus the max-flood rebuild, which
+            # takes at most twice the new tree's height (uplink + downlink of
+            # the first ordinary cycle discovers it exactly as D was
+            # discovered at initialization).
+            horizon = 2 * D_before
+            rebuild = 2 * new_D
+            cycle_start = t + horizon + tau_re + rebuild
+            reelection_in_progress = False
+            recovery_rounds.append(cycle_start)
 
             for i in range(N):
                 _silent(i, t)
@@ -439,7 +457,7 @@ def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
             continue
 
         if dead[current_hub]:
-            # No failover (baseline) or backup also dead: network stalls.
+            # No failover (baseline) or re-election not yet detected: network stalls.
             for i in range(N):
                 _silent(i, t)
             t += 1
@@ -509,7 +527,7 @@ def run_eigentree_ft(env, T, G, N, t_fail, c=2.0, sigma=1.0, tau_init=200,
         t += 1
 
     events = {"hub_history": hub_history, "recovery_rounds": recovery_rounds,
-              "fail_schedule": fail_schedule, "final_backup": backup,
+              "fail_schedule": fail_schedule, "final_hub": current_hub,
               "hub0": hub0, "D0": D, "tree_valid_checks": tree_valid_checks,
               "trees_snapshot": trees_snapshot}
     return cum_regret, events
@@ -524,7 +542,7 @@ def _csv_path(graph_type, N, K, T, tag):
 
 
 def compute_ft_data(graph_type, N, K, T, fail_every, sigma=1.0, c=2.0, seed=0, p=None,
-                     fail_start=None, fail_at=None):
+                     fail_start=None, fail_at=None, tau_re=None):
     """
     Runs one EigenTree-FT trajectory over horizon T with a hub failure
     injected either at the explicit rounds in `fail_at` (a list, takes
@@ -533,11 +551,12 @@ def compute_ft_data(graph_type, N, K, T, fail_every, sigma=1.0, c=2.0, seed=0, p
     injects failures at t=1000,2000,3000,4000; fail_start=2000 instead gives
     t=2000,3000,4000), and directly tests the Fault Tolerance section's
     claims:
-      1. Failover correctness: after each promotion, the tree is checked to
+      1. Failover correctness: after each re-election, the tree is checked to
          be a valid single spanning tree (not just plotted).
       2. The network keeps making progress (regret keeps growing, not
-         flatlining) through every failure, using the recursive-backup rule
-         so each newly-promoted hub has its own backup for the next failure.
+         flatlining) through every failure, using the same warm-started
+         re-election procedure each time, with no state carried over between
+         failures beyond the current psi.
     """
     if fail_start is None:
         fail_start = fail_every
@@ -552,7 +571,7 @@ def compute_ft_data(graph_type, N, K, T, fail_every, sigma=1.0, c=2.0, seed=0, p
     np.random.seed(run_seed)
     env = BanditEnv(means, sigma=sigma)
     cr_ft, events = run_eigentree_ft(env, T, G, N, fail_schedule, c=c, sigma=sigma,
-                                     enable_failover=True)
+                                     tau_re=tau_re, enable_failover=True)
     group_ft = cr_ft.sum(axis=0)
 
     return {
@@ -775,11 +794,11 @@ def plot_ft(data, graph_type, N, K, T, tag):
 
 
 def run_experiment(graph_type, N, K, T, fail_every, sigma, c, mode="all", seed=0, p=None,
-                    fail_start=None, fail_at=None):
+                    fail_start=None, fail_at=None, tau_re=None):
     tag = ("at" + "-".join(str(t) for t in fail_at)) if fail_at is not None else f"every{fail_every}"
     if mode in ("compute", "all"):
         data = compute_ft_data(graph_type, N, K, T, fail_every, sigma=sigma, c=c, seed=seed, p=p,
-                                fail_start=fail_start, fail_at=fail_at)
+                                fail_start=fail_start, fail_at=fail_at, tau_re=tau_re)
         save_ft_csv(data, graph_type, N, K, T, tag)
     if mode == "compute":
         return
@@ -809,6 +828,8 @@ def parse_args():
     ap.add_argument("--sigma",      type=float, default=1.0)
     ap.add_argument("--c",          type=float, default=2.0)
     ap.add_argument("--seed",       type=int, default=0)
+    ap.add_argument("--tau-re",     type=int, default=None,
+                    help="warm-started re-election rounds (default: ceil(log N))")
     ap.add_argument("--mode", choices=("compute", "plot", "all"), default="all")
     return ap.parse_args()
 
@@ -817,4 +838,4 @@ if __name__ == "__main__":
     args = parse_args()
     run_experiment(args.graph, args.N, args.K, args.T, args.fail_every,
                    args.sigma, args.c, mode=args.mode, seed=args.seed, p=args.p,
-                   fail_start=args.fail_start, fail_at=args.fail_at)
+                   fail_start=args.fail_start, fail_at=args.fail_at, tau_re=args.tau_re)

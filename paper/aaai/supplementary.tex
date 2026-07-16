@@ -330,260 +330,99 @@ the corresponding quantity afterward, as introduced at each result.
 The underlying graph $G$ is \emph{2-connected}: it remains connected after the removal of any single node. Equivalently, $G$ has no cut vertices.
 \end{definition}
 
-\subsection{Hub Failure}
+We take $G$ to be 2-connected throughout, the standing assumption of
+Section~\ref{sec:mdst-gap}: it follows from an algebraic connectivity $\lambda_2$
+bounded away from $0$ via $\kappa(G)\geq\lambda_2$ \citep{fiedler1973}, and a
+degree bound $\delta(G)\geq N/2$ is one simple sufficient condition.
 
-The backup $b^\star = \arg\max_{j\in\mathrm{ch}(h^\star)}\tilde\psi_j$
-mirrors the hub's aggregate state $(\hat n,\hat s,P)$ every cycle. It lies
-at depth 1, so it receives every downlink broadcast in full.
+\subsection{Detection and Synchronous Restart}
 
-\begin{proposition}[Backup staleness]
-\label{prop:staleness}
-At the end of any cycle, $b^\star$'s stored state equals the hub's state after the hub's own pull that cycle. If the hub fails during the next cycle, the backup's state is at most one full cycle stale.
+Before the survivors can re-elect they must detect the failure and enter the new
+power iteration in step, with no coordinator and no synchronized clocks. Both
+follow from the routing tree already in place. Every node learned its depth $d_i$
+and the height $D$ from the first downlink, where depth is the hop count that
+message carried, and every ordinary cycle is one uplink-and-downlink traversal of
+length $2D+1$ hops. Each node therefore knows, for each of its tree neighbors, the
+exact hop of the cycle at which that neighbor's message is due, and runs a single
+uniform timer $\tau = 2D+1$ hops against that schedule, suspecting a neighbor dead
+when its due message fails to arrive within $\tau$. The rule is identical for
+every node, and no node is a distinguished detector: the hub is detected by its
+children exactly as any node is detected by its parent.
+
+\begin{proposition}[Failure horizon]
+\label{prop:horizon}
+Under the uniform timer $\tau = 2D+1$, after any single node failure every surviving node receives the failure notice within $2D$ hops of the earliest detection.
 \end{proposition}
 
 \begin{proof}
-In a given cycle, the hub receives the full uplink, updates its aggregate
-$(\hat n,\hat s)$ with every agent's new observations, increments $P$,
-performs its own pull, which further updates $(\hat n,\hat s,P)$, and
-broadcasts this final state on the downlink. $b^\star$ is at depth 1, so it
-receives this downlink at hop count $1$: exactly the hub's post-pull state
-for that cycle. It overwrites its stored copy with it.
+Removing $v$ severs $\mathcal{T}$ into components: the component above $v$ (still
+containing every node not below $v$) and one component per child
+$c\in\mathrm{ch}(v)$, since every tree path between two of these components ran
+through $v$. No survivor can flood all of them over tree edges, because the paths
+between components are exactly the ones that passed through $v$; instead each
+component has its own first detector, the parent $\mathrm{par}(v)$ for the upper
+component and the child $c$ for each lower one, and each detector floods the
+notice over the intact tree edges of its own component only.
 
-The hub may fail at any point during the following cycle, whether before
-completing its own uplink aggregation, during its own pull, or while
-broadcasting its downlink. In every case, the most recent state $b^\star$
-has on hand is the one it received at the end of the prior, successfully
-completed cycle. The backup's state therefore reflects all observations up
-to and including the hub's pull in the last cycle that completed normally,
-which is at most one full cycle behind the hub's true, unrecoverable state
-at the moment of failure.
+Two quantities bound the horizon. First, the detectors do not fire
+simultaneously: a detector at depth $d$ expects the failed node's message at hop
+$d$ (uplink) or hop $2D-d$ (downlink) of the cycle, so two detectors' firing
+times differ by their difference in these expected hops, which is at most the
+depth spread $D$. Since all detectors use the same $\tau$ measured against the
+same round-1 schedule, the last detector fires at most $D$ hops after the first.
+Second, within a component the notice floods over tree edges from the detector,
+reaching the farthest node in at most the component's height, itself at most $D$
+hops. Adding the two, the last node to hear does so at most $D + D = 2D$ hops
+after the earliest detection.
 \end{proof}
 
-$b^\star$ detects hub silence via timeout: a missing downlink within the
-expected window. In this synchronous, round-structured protocol, a missed
-downlink is conclusive rather than merely suggestive, following the
-impossibility result of Anagnostou and Hadzilacos \citep{anagnostou1993}
-for asynchronous systems generally. Upon detecting this, $b^\star$
-executes four steps.
+The same $2D$ budget makes the restart synchronous. The notice is flooded
+carrying the downlink's hop counter, so a node that receives it $h$ hops from its
+detector knows that $h$ of the $2D$ hops have elapsed and waits the remaining
+$2D-h$ hops before taking its first power-iteration step. Every node's
+$(\text{hops travelled}) + (\text{hops waited}) = 2D$, so all survivors take
+their first step at the same instant, measured from the earliest detection, with
+no clock agreement. The wait is read directly off the hop counter, which is the
+node's depth $d_i$ up to the fixed offset it always was, so the depth each node
+already holds serves three roles at once, the detection deadline through $\tau$,
+the bound on detector skew, and the restart countdown, and no field is added to
+any message.
 
-\textbf{Self-promotion.} $b^\star$ sets its own depth to $0$, clears its
-parent pointer, and begins acting as hub using its stored state.
+\subsection{Re-Election}
 
-\textbf{Sibling re-routing.} $b^\star$ floods a promotion message over
-$G$-edges rather than tree edges, since $b^\star$ and its former siblings
-$\mathrm{ch}(h^\star)\setminus\{b^\star\}$ share no tree edge once
-$h^\star$ is removed. Every former sibling learns to route through
-$b^\star$ instead.
+Deleting node $v$ from $A$ gives $\tilde A = A + E$ with
+$E = -(A e_v e_v^\top + e_v e_v^\top A)$. As $A$ has no self-loops, $E$ has rank
+at most $2$ and $\|E\|_2 = \|A e_v\|_2 = \sqrt{\deg(v)}$, since $A e_v$ is the
+$v$-th column of $A$, a $0/1$ vector with $\deg(v)$ ones. This holds for any $v$;
+the hub is only the case of largest $\deg(v)$.
 
-\textbf{Depth update.} $b^\star$ recomputes and broadcasts the new tree
-height $D_{\mathrm{new}}$ in its first downlink as the new hub.
-
-\textbf{Resume.} $b^\star$ immediately resumes the ordinary protocol cycle
-as the new hub.
-
-\begin{proposition}[Density implies 2-connectivity]
-\label{prop:dense-2conn}
-If $\delta(G) \geq N/2$, where $\delta(G)$ is the minimum degree over all nodes, then $G$ is 2-connected.
+\begin{proposition}[Warm-started re-election]
+\label{prop:reelection}
+After any single node failure, the warm-started power iteration on $\tilde A$ converges to the leading eigenvector of $\tilde A$ from the pre-failure $\tilde\psi$, and reaching tolerance $\epsilon$ takes $O\bigl(\log(\sqrt{\deg(v)}/(\gamma\epsilon))/\log(\lambda_1/\lambda_2)\bigr)$ rounds, where $\gamma$ is the eigenvalue gap of $\tilde A$. On a graph with $\lambda_2$ bounded away from $0$, this is $O(\log(N/\epsilon))$.
 \end{proposition}
 
 \begin{proof}
-Suppose for contradiction that $G$ is not 2-connected. Then some node $v$
-is a cut vertex: $G - v$, the graph with $v$ and its incident edges
-removed, splits into at least two connected components $C_1,\ldots,C_m$,
-$m\geq 2$. Let $u$ be any node in the smallest of these components. The
-components partition the remaining $N-1$ nodes among at least 2 parts, so
-the smallest part has size at most $\lfloor(N-1)/2\rfloor$.
+After $v$ goes silent, a surviving node's update
+$\tilde w_i = \sum_{j\sim i} w_j$ no longer includes the dead neighbor, so the
+operator applied each round is exactly $\tilde A$ on the live nodes. Since $G$ is
+2-connected, $G\setminus\{v\}$ is connected, so $\tilde A$ is irreducible and has
+a unique positive leading eigenvector $\tilde\psi_{\tilde A}$ by
+Perron--Frobenius, and power iteration converges to it from any start with
+nonzero overlap; the warm start $\tilde\psi$ qualifies, as both vectors are
+strictly positive.
 
-Every neighbor of $u$ in $G$ is either $v$ itself, or another node within
-$u$'s own component $C_i$. This follows from the definition of the
-components of $G-v$: $u$ has no edges to nodes in a different component
-$C_j$, $j\neq i$, since removing $v$ disconnects them. The component $C_i$
-has at most $\lfloor(N-1)/2\rfloor$ nodes total, so excluding $u$ itself,
-$u$ has at most $\lfloor(N-1)/2\rfloor - 1$ possible neighbors within
-$C_i$, plus possibly one edge to $v$, giving
-\[
-\deg(u) \leq \left(\left\lfloor\frac{N-1}{2}\right\rfloor - 1\right) + 1 = \left\lfloor\frac{N-1}{2}\right\rfloor < \frac{N}{2},
-\]
-which contradicts $\delta(G)\geq N/2$, since $\delta(G)\leq \deg(u)$ by
-definition of $\delta(G)$ as the minimum over all nodes. No cut vertex
-exists, so $G$ is 2-connected.
-\end{proof}
-
-\begin{proposition}[Failover correctness and completeness]
-\label{prop:ft-correct}
-After promotion, the network forms a valid spanning tree rooted at $b^\star$ with height $D_{\mathrm{new}} \leq D+1$ and no cycles. The procedure completes in $O(\mathrm{diam}(G))$ rounds in general, and $O(1)$ rounds when $b^\star$ is directly connected to all former siblings.
-\end{proposition}
-
-\begin{proof}
-\textbf{Validity and acyclicity.} Before promotion, $\mathcal{T}$ is a
-directed tree rooted at $h^\star$. Removing $h^\star$ from $\mathcal{T}$
-leaves a forest: one subtree rooted at each child of $h^\star$, including
-$b^\star$'s own subtree. The sibling re-routing step adds exactly one new
-directed edge from each former sibling $s\in\mathrm{ch}(h^\star)\setminus\{b^\star\}$
-to $b^\star$, possibly via intermediate relay nodes along a $G$-path, with
-each such hop also becoming a new tree edge oriented toward $b^\star$.
-Every edge added points toward $b^\star$, and $b^\star$'s own subtree's
-internal edges are untouched and were already acyclic, so the result is a
-single tree. Every node has a path to $b^\star$, its own subtree's path if
-it was already in $b^\star$'s subtree, or its old path to the point where
-its component was grafted onto $b^\star$ otherwise, and no cycle can form
-since $b^\star$ has no outgoing edge, as it is the root, and every other
-node's path leads strictly toward it.
-
-\textbf{Height.} $b^\star$ moves from depth 1 to depth 0, so its own
-original subtree's depths each decrease by exactly 1. A former sibling $s$
-and its subtree, previously routed via $h^\star$ at combined depth $d_s$
-within $s$'s original numbering, offset by 1 from $h^\star$, now route via
-$b^\star$ directly, or through at most one additional relay hop if $s$ is
-not directly $G$-adjacent to $b^\star$. In the single-hop case the depth of
-any node in $s$'s subtree is unchanged relative to $b^\star$'s new
-position: it was 1 hop from $h^\star$, and it is now 1 hop from $b^\star$.
-The worst case across all reattached subtrees is therefore a height
-increase of at most 1 relative to the original $D$, giving $D_{\mathrm{new}}
-\leq D+1$.
-
-\textbf{Completeness.} The self-promotion step is a purely local
-operation, taking 0 communication rounds. The sibling re-routing step
-floods a message over $G\setminus\{h^\star\}$, which is connected by
-Definition~\ref{def:2conn}, so the flood reaches every former sibling in
-at most $\mathrm{diam}(G\setminus\{h^\star\}) \leq \mathrm{diam}(G)$
-rounds, using $O(|E|)$ messages in the worst case. If every former sibling
-has a direct $G$-edge to $b^\star$, the flood completes in a single round
-using $O(|\mathrm{ch}(h^\star)|)$ messages. The depth update and
-resumption are piggybacked on the same message, adding no further rounds.
-\end{proof}
-
-A subtlety arises during the possibly multi-round re-routing step:
-siblings that are themselves internal nodes have not yet forwarded a
-downlink to their own subtrees. Left unaddressed, this could cause a
-cascade of spurious non-hub failovers as descendants time out waiting for
-a parent that is mid-reroute. We resolve it with a lightweight
-\textsc{Hold} signal, piggybacked on the existing downlink mechanism. When
-$b^\star$'s flood reaches a former sibling $s$, $s$ immediately forwards
-\textsc{Hold} down its own tree edges, before completing its own
-re-attachment. Every node that receives \textsc{Hold} resets its own
-downlink timeout, forwards \textsc{Hold} to its own children, and waits
-for either a fresh downlink or an additional $\mathrm{diam}(G)$ rounds of
-continued silence, at which point it may correctly conclude $s$ itself has
-failed, before declaring a timeout.
-
-\begin{proposition}[No false timeouts during re-routing]
-\label{prop:noholdfalsepositive}
-Under the \textsc{Hold} propagation rule above, no node in a re-routing sibling's subtree declares its parent failed while the sibling re-routing step of promotion is still in progress, provided that step completes within $\mathrm{diam}(G)$ rounds of the sibling receiving the flood.
-\end{proposition}
-
-\begin{proof}
-Let $s$ be a former sibling of $b^\star$ and let $v$ be any node in $s$'s
-subtree at tree-distance $k\geq 1$ below $s$. By construction, $s$
-forwards \textsc{Hold} to $\mathrm{ch}(s)$ in the same round it is reached
-by $b^\star$'s flood, and every subsequent node forwards \textsc{Hold} to
-its own children in the next round upon receipt. By induction on $k$, $v$
-receives \textsc{Hold} exactly $k$ rounds after $s$ is reached by the
-flood. $s$ is reached within $\mathrm{diam}(G\setminus\{h^\star\})\leq\mathrm{diam}(G)$
-rounds of the hub's failure (Proposition~\ref{prop:ft-correct}), and this
-bound is independent of $v$'s position in the tree, so $v$ receives
-\textsc{Hold} before its own downlink timeout, calibrated to $D$ rounds
-from its own uplink, would otherwise have elapsed. This holds provided the
-flood's completion time does not itself exceed that calibration, which is
-guaranteed by the hold rule extending the effective timeout by a further
-$\mathrm{diam}(G)$ rounds once \textsc{Hold} is received.
-
-Once $v$ holds \textsc{Hold}, by the waiting rule it does not declare $s$
-failed until an additional $\mathrm{diam}(G)$ rounds have elapsed without a
-fresh downlink. By hypothesis, the sibling re-routing step completes
-within $\mathrm{diam}(G)$ rounds of $s$ being reached, so $s$ finishes its
-own re-attachment and forwards a fresh downlink, carrying the updated
-aggregate and $D_{\mathrm{new}}$, to $v$ strictly before $v$'s held
-timeout would expire. $v$ never declares $s$ failed during this window.
-\end{proof}
-
-The backup-selection and promotion procedures apply recursively. After
-$b^\star$ promotes itself, it selects its own highest-$\tilde\psi$ child as
-its own backup via the same rule, so \merwft tolerates any finite sequence
-of hub failures.
-
-\begin{proposition}[Sequential hub failure tolerance]
-\label{prop:recursive}
-Under the recursive backup protocol, \merwft tolerates any finite sequence of hub failures $h_0=h^\star, h_1, h_2,\ldots$, where each $h_{k+1}$ is the backup selected by $h_k$. After each failure, exactly one cycle runs without a backup, and the protocol resumes with a newly selected successor.
-\end{proposition}
-
-\begin{proof}
-By induction on the number of failures $k$. At $k=0$, $h_0=h^\star$
-selects its backup $b_{h_0}$ after learning its children from the first
-uplink, which requires no precondition beyond the tree already existing.
-If $h_0$ fails, $h_1=b_{h_0}$ promotes via Proposition~\ref{prop:ft-correct}
-and, immediately upon resuming as the new hub, runs the same
-backup-selection procedure using its own first uplink to select
-$b_{h_1}$. The cycle in which $h_1$ resumes, its first cycle as hub,
-therefore runs without an announced backup, since $b_{h_1}$ is only
-selected and announced at the end of that cycle's uplink and downlink.
-
-Assume the claim holds after $k$ failures: $h_k$ is currently hub with an
-announced backup $b_{h_k} = h_{k+1}$. If $h_k$ fails, $h_{k+1}$ promotes by
-the same argument as the base case, and the induction continues
-identically. Each promotion consumes at least one previously-live node,
-the failed hub, and $V$ is finite, so this process terminates after at
-most $N-1$ failures, when only one node remains live.
-\end{proof}
-
-\subsection{Non-Hub Failure}
-
-When a non-hub node $v$ at depth $d_v$ fails, only the subtree rooted at
-$v$ is disrupted. The hub and the rest of the tree continue normally.
-Failure is detected by $\mathrm{par}(v)$, the fastest possible locus:
-children of $v$ would only notice after $D-d_v$ further hops, and the hub
-only after a full cycle. Each node $c$ precomputes a \emph{swap parent}
-\[
-u_c = \arg\min_{u\in\mathcal{N}_G(c)\setminus\{v\}} \max_{\ell\in\mathrm{subtree}(c)} (d_u + 1 + d_\ell - d_c)
-\]
-once depths are established after the first cycle, following the
-best-swap-edge framework of Nardelli et al.\ \citep{nardelli2003}. This
-minimizes the maximum depth increase across $c$'s entire subtree rather
-than just $c$'s own depth. Re-attachment then takes exactly one round:
-$\mathrm{par}(v)$, having learned $\mathrm{ch}(v)$ from prior uplinks
-routed through $v$, pushes each orphaned child $c$ its precomputed swap
-assignment $u_c$. $c$ sets $\mathrm{par}(c)\leftarrow u_c$, $d_c \leftarrow
-d_{u_c}+1$, propagating the uniform depth shift to its entire subtree.
-
-\begin{proposition}[Non-hub failover correctness]
-\label{prop:nonhub-correct}
-After re-attachment of all orphaned children of a failed node $v$, the remaining live nodes form a valid spanning tree with height $D_{\mathrm{new}} \leq D + |\mathrm{ch}(v)|$ and no cycles.
-\end{proposition}
-
-\begin{proof}
-Before failure, $\mathcal{T}$ is a directed tree. Removing $v$ leaves a
-forest: one subtree rooted at each $c\in\mathrm{ch}(v)$, plus the
-component still containing the hub, which is $\mathcal{T}$ minus $v$'s
-entire subtree. By Definition~\ref{def:2conn}, $G\setminus\{v\}$ remains
-connected, so each orphaned child $c$ has at least one neighbor $u_c \in
-\mathcal{N}_G(c)\setminus\{v\}$ that lies in the connected remainder of
-the graph, and in particular in the same component as the hub, since $c$'s
-only route to the rest of the graph other than through $v$ must pass
-through such a neighbor. We may always select $u_c$ to be a node not
-itself orphaned by $v$'s failure, i.e., not in $v$'s subtree: $v$'s
-subtree is disconnected from the hub's component in $\mathcal{T}\setminus\{v\}$,
-but $G\setminus\{v\}$ is connected only via non-tree $G$-edges that
-necessarily lead outside $v$'s former subtree for at least one such edge,
-since otherwise $c$'s entire component would be isolated in
-$G\setminus\{v\}$, contradicting 2-connectivity.
-
-Adding the directed edge $c \to u_c$ attaches $c$'s subtree to the hub's
-component. $u_c$ is not itself in $c$'s subtree, so no cycle is created:
-the new edge points strictly out of $c$'s subtree toward the hub's
-component, and within $c$'s own subtree the original tree edges are
-unchanged and remain acyclic. Repeating this for every $c\in\mathrm{ch}(v)$
-reattaches every orphaned subtree.
-
-Each re-attachment can increase the depth of nodes within the affected
-subtree by at most 1 relative to their depth before $v$'s failure. A node
-at relative depth $d_\ell-d_c$ below $c$ within $c$'s subtree is now at
-depth $d_{u_c}+1+(d_\ell-d_c)$, an increase of $d_{u_c}+1-d_c$ over its old
-depth $d_\ell$. $u_c$ was chosen to minimize the worst-case increase
-across the whole subtree, so this quantity need not exceed a small
-constant in practice, but in the worst case over all $|\mathrm{ch}(v)|$
-orphaned children, the depth of the overall tree can increase by at most
-$|\mathrm{ch}(v)|$, one unit contributed by each independently-reattached
-child subtree. Hence $D_{\mathrm{new}} \leq D + |\mathrm{ch}(v)|$.
+For the rate, the initial angle to the target is bounded by Davis--Kahan
+\citep{daviskahan1970},
+$\sin\Theta(\tilde\psi,\tilde\psi_{\tilde A}) \leq \|E\|_2/\gamma
+= \sqrt{\deg(v)}/\gamma$. Each power-iteration round multiplies the
+component orthogonal to $\tilde\psi_{\tilde A}$ by at most $\lambda_2/\lambda_1$
+relative to the leading one, so the residual angle after $t$ rounds is at most
+$(\lambda_2/\lambda_1)^t\tan\Theta$. Setting this below $\epsilon$ gives
+$t = O(\log(\tan\Theta/\epsilon)/\log(\lambda_1/\lambda_2))
+   = O(\log(\sqrt{\deg(v)}/(\gamma\epsilon))/\log(\lambda_1/\lambda_2))$.
+When $\lambda_2$ is bounded away from $0$, both $\gamma$ and
+$\log(\lambda_1/\lambda_2)$ are $\Omega(1)$ while $\deg(v)\leq N$, so this
+is $O(\log(N/\epsilon))$.
 \end{proof}
 
 \subsection{Recovery}
@@ -609,9 +448,8 @@ If $v$ attaches to a live, already-attached neighbor $j$ upon recovery, the resu
 \begin{proof}
 By hypothesis, immediately before $v$'s recovery the live nodes other than
 $v$ form a valid spanning tree $\mathcal{T}''$ rooted at whichever node is
-currently hub: the original $h^\star$, a promoted backup, or a
-further-promoted successor under Proposition~\ref{prop:recursive}. The
-argument below does not depend on which. $v$ itself is disconnected from
+currently hub: the original $h^\star$ or a hub elected after a later failure.
+The argument below does not depend on which. $v$ itself is disconnected from
 $\mathcal{T}''$, having no parent pointer and no place in the current
 tree.
 
@@ -628,9 +466,9 @@ pendant edge to a new vertex is a tree, spanning all live nodes including
 $v$, rooted at the same node as $\mathcal{T}''$.
 
 This argument uses only that $j$ is live and already attached. It does not
-depend on $j$'s identity, depth, or role, whether ordinary node, current
-hub, or backup, so it composes without modification with any prior
-sequence of hub promotions or non-hub re-attachments.
+depend on $j$'s identity, depth, or role, whether ordinary node or current
+hub, so it composes without modification with any prior sequence of
+re-elections.
 \end{proof}
 
 \bibliography{references}
