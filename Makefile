@@ -19,7 +19,7 @@ paper/arxiv/results: $(FIGURE_STAMP)
 	mkdir -p paper/arxiv/results
 	rsync -a paper/results/ paper/arxiv/results/
 
-aaai: paper/aaai/main.tex paper/aaai/results
+paper/aaai/main.pdf: paper/aaai/main.tex paper/aaai/results
 	cd paper/aaai && latexmk -pdf -interaction=nonstopmode main.tex
 
 paper/arxiv/main.pdf: paper/arxiv/main.tex paper/arxiv/results
