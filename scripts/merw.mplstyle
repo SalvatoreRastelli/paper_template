@@ -5,15 +5,15 @@ text.latex.preamble: \usepackage{amsmath} \usepackage{amssymb}
 
 font.family  : serif
 font.serif   : Computer Modern Roman
-font.size    : 11
+font.size    : 8
 
-axes.titlesize  : 12
-axes.labelsize  : 11
+axes.titlesize  : 8
+axes.labelsize  : 8
 axes.linewidth  : 0.8
 axes.grid : True
 
-xtick.labelsize    : 9
-ytick.labelsize    : 9
+xtick.labelsize    : 8
+ytick.labelsize    : 8
 xtick.direction    : in
 ytick.direction    : in
 xtick.major.width  : 0.8
@@ -22,13 +22,13 @@ ytick.major.width  : 0.8
 lines.linewidth  : 1.8
 lines.markersize : 5
 
-legend.fontsize    : 9
+legend.fontsize    : 8
 legend.framealpha  : 0.9
 legend.edgecolor   : 0.8
 
 figure.dpi         : 150
 savefig.dpi        : 300
-savefig.bbox       : tight
+savefig.pad_inches : 0.02
 savefig.format     : pdf
 
 patch.linewidth : 0.8

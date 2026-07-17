@@ -53,6 +53,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 plt.style.use(Path(__file__).resolve().parent / "merw.mplstyle")
+# AAAI single-column width in inches (\columnwidth = 239.39pt / 72.27pt-per-in).
+# Paper figures are authored at exactly this width and included at
+# width=\columnwidth, so a point in matplotlib equals a point on the page.
+COLUMN_WIDTH_IN = 3.317
 import numpy as np
 import networkx as nx
 warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
@@ -1119,9 +1123,8 @@ def load_regret_csv(graph_type, N, K, T):
 def plot_regret(results, T, N, K, graph_type, n_runs):
     """Render the group regret and regret-vs-pulls figure from precomputed results."""
     ts = np.arange(1, T + 1)
-    info = f"$N={N}$, $K={K}$, $T={T}$, {n_runs} runs"
 
-    fig, axes = plt.subplots(2, 1, figsize=(6, 7.5))
+    fig, axes = plt.subplots(2, 1, figsize=(COLUMN_WIDTH_IN, 4.1))
 
     max_common_pulls = min(results[n][4][-1] for n in ALGO_NAMES if n in results)
     pull_axis = np.linspace(0, max_common_pulls, 500)
@@ -1141,21 +1144,22 @@ def plot_regret(results, T, N, K, graph_type, n_runs):
         handles.append(line)
         labels.append(label)
 
-    axes[0].set_xlabel("Round $t$", fontsize=15)
-    axes[0].set_ylabel("Group cumulative regret $\\sum_i R_i(t)$", fontsize=15)
-    axes[0].set_title(f"Group regret — {graph_type.upper()} graph\n{info}", fontsize=16)
-    axes[0].tick_params(labelsize=13)
+    axes[0].set_xlabel("Round $t$")
+    axes[0].set_ylabel("$\\sum_i R_i(t)$")
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].set_xlabel("Total arm pulls (all agents combined)", fontsize=15)
-    axes[1].set_ylabel("Group cumulative regret $\\sum_i R_i(t)$", fontsize=15)
-    axes[1].set_title(f"Group regret vs.\\ total pulls\n{info}", fontsize=16)
-    axes[1].tick_params(labelsize=13)
+    axes[1].set_xlabel("Total arm pulls (all agents combined)")
+    axes[1].set_ylabel("$\\sum_i R_i(t)$")
     axes[1].grid(True, alpha=0.3)
 
-    fig.legend(handles, labels, loc="lower center", ncol=len(labels), fontsize=15,
-               bbox_to_anchor=(0.5, 0.0))
-    fig.tight_layout(rect=[0, 0.06, 1, 1])
+    for ax in axes:
+        ax.ticklabel_format(axis="both", style="sci", scilimits=(-2, 3))
+        for lbl in ax.get_yticklabels():
+            lbl.set_rotation(45)
+
+    fig.legend(handles, labels, loc="lower center", ncol=len(labels),
+               bbox_to_anchor=(0.5, 0.0), columnspacing=1.0, handletextpad=0.4)
+    fig.tight_layout(rect=[0.02, 0.09, 0.98, 1])
     out1 = REGRET_DIR / f"relay_regret_{graph_type}_N{N}_K{K}_T{T}.pdf"
     fig.savefig(out1)
     plt.close(fig)

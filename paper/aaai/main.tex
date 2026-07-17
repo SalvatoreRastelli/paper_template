@@ -89,48 +89,33 @@ model rich enough that any agent can reach any other in one step (e.g., the
 all-to-all broadcast of \cite{hillel2013distributed}). 
 
 We instead ask whether the communication graph $G$ itself can select which
-agents should play a coordinating role. This motivates measuring an agent's
-importance through a global notion of centrality. Building on this idea, we
-propose \merw, a method to \emph{construct}, in a completely decentralized
-way, a communication structure according to the eigenvector centrality induced
-by $G$.
+agent should coordinate. We propose \merw, a protocol in which a coordinator
+\emph{emerges} from the graph structure through purely local computation, with
+no agent ever seeing the global topology. Each agent's importance is measured by
+its eigenvector centrality, computed via a decentralized gossip protocol
+\citep{jelasity2007asynchronous}; the most central node becomes the hub, and a
+routing tree spanning $G$ is grown around it by max-flooding, again from local
+information alone. Every agent then routes its observations up toward the hub,
+which sees the globally aggregated picture and broadcasts its decisions back
+down. We prove this hub is statistically equivalent to a true centralized
+coordinator for any decision rule that depends only on globally aggregated
+per-agent statistics, at the cost of a communication overhead set by the tree's
+depth, which we bound against that of the shallowest possible tree.
 
-In \merw, a coordinator \emph{emerges} from the graph structure, identified
-from purely local computation, with no agent ever seeing the global topology.
-The key idea is that eigenvector centrality, computed
-via a fully decentralized gossip protocol \citep{jelasity2007asynchronous},
-can be used to identify a ``most central'' node in $G$. One can then construct
-a routing tree which spans $G$ via max-flooding, again only using local
-information. Once the tree is in place, the hub acts as a de-facto central
-coordinator: every agent routes its observations up toward the hub, which sees
-the globally aggregated picture and broadcasts its decisions back to the other
-nodes. We prove that this emergent coordinator is statistically equivalent to a
-true centralized coordinator for any decision rule that depends only on
-globally aggregated per-agent statistics, at the cost of a bounded
-communication overhead determined by the tree's depth.
+Any such task can run over this same hub-and-tree structure by supplying two
+rules: what each agent contributes locally, and what the hub decides from the
+aggregate. We instantiate these for two standard cooperative multi-armed bandit
+objectives, \emph{regret minimization} and \emph{best arm identification} (BAI),
+and show the hub recovers centralized-level performance in both.
 
-Any decentralized cooperative-learning task whose decision rule depends only
-on globally aggregated per-agent statistics can therefore run over the same
-emergent hub-and-tree structure, by supplying two application-specific rules:
-1) what each agent contributes locally, and 2) what the hub decides from the
-aggregate. \merw is this protocol, parameterized by those two rules; we
-instantiate both for two standard
-cooperative multi-armed bandit objectives, \emph{regret minimization} and
-\emph{best arm identification} (BAI), and show in both cases that the
-emergent coordinator recovers centralized-level performance.
-
-The emergent-coordinator design has one structural weakness: the hub is a
-single point of failure, and more generally, any node's failure disrupts the
-part of the tree that routes through it. We handle every failure with one
-procedure: a dead node is a low-rank perturbation of the graph, the survivors
-re-run the same eigenvector computation that elected the original hub on the
-perturbed graph, warm-started from the pre-failure centralities, and rebuild the
-tree around whoever is now most central. No node is treated specially and no
-backup is kept. Removing the hub is simply the largest perturbation, so it is
-where re-election has the most work to do; a low-degree node barely moves the
-centralities and re-election reduces to a local re-attach. The cost is governed
-by the graph's spectral gap, the same quantity that governs hub emergence in
-Section~\ref{sec:mdst-gap}.
+By rebuilding a centralized structure, \merw inherits the weakness that pushed
+cooperative learning toward decentralization in the first place: a central
+coordinator is a single point of failure, and its failure takes the whole
+system down. We recover robustness without giving up the centralized statistics.
+A dead node is a perturbation of the graph, so the survivors re-run the same
+election on the perturbed graph and rebuild the tree around whoever is now most
+central. No node is treated specially and no backup is kept: the hub is only the
+largest instance of one mechanism that covers every node.
 
 \paragraph{Contributions.} (1) A fully decentralized protocol for building a
 centralized communication structure: the hub and tree emerge from local
@@ -163,12 +148,12 @@ rules.
 \paragraph{Eigenvector centrality and decentralized computation.}
 Eigenvector centrality appears as the stationary distribution of Maximal
 Entropy Random Walk \citep{burda2009localization}, which is the
-information-theoretic argument we use to justify it (Sec.~\ref{sec:merw}).
+information-theoretic argument we use to justify it.
 Computing it exactly requires solving the graph's eigenvalue problem;
 \cite{jelasity2007asynchronous} give a gossip-based normalization for
-distributed power iteration that avoids a global all-reduce, which we use
-directly, with both the fixed iteration count and the gossip-round count set
-to $O(\log N)$.
+distributed power iteration that avoids a global all-reduce, which is what
+makes centrality available to us without any node aggregating over the whole
+network.
 
 \paragraph{Leader election and fault tolerance.} Classical leader election,
 Bully \citep{garciamolina1982} and ring-based extrema-finding
@@ -176,10 +161,10 @@ Bully \citep{garciamolina1982} and ring-based extrema-finding
 message-passing; the result depends only on process identities, not on graph
 structure, so a failure is repaired by the same election regardless of which
 node is lost or how central it was. \merwft elects by eigenvector centrality
-instead, so a failure is a change to the quantity being elected on, not just a
-removal from the candidate pool: we treat it as a low-rank perturbation of the
-adjacency matrix and bound the resulting movement of the leading eigenvector by
-the Davis--Kahan theorem \citep{daviskahan1970}. Perturbation analysis of
+instead. A failure then changes the quantity being elected on: it perturbs the
+adjacency matrix, and the leading eigenvector moves. We treat it as a low-rank
+perturbation and bound that movement by the Davis--Kahan theorem
+\citep{daviskahan1970}. Perturbation analysis of
 graph spectra under node removal has been studied for how it shifts a
 network's dynamical behavior \citep{restrepo2006}; we use the same perturbation
 view constructively, to warm-start the re-election itself rather than to
@@ -187,25 +172,46 @@ characterize the shift. This ties the repair cost to the spectral gap and lets
 one procedure cover any node's failure, hub or not, with no backup and no
 special case.
 
-\paragraph{Minimum-diameter spanning trees.} Choosing the coordinator to
-directly minimize the routing tree's diameter is a solved problem: the optimal
-root is the graph's absolute center, and a shortest-path tree rooted there is a
-minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}. This
-has been made fully distributed
-\citep{bui2013distributed,butelle1995selfstabilizing}, including a
-self-stabilizing version that recovers after a fault, but the cost is
-structural: computing the absolute center requires every node to hold
-all-pairs shortest-path information, $O(N)$ per-node distance entries at
-minimum and $O(N^2)$ total network state \citep{bui2013distributed}, not just
-its own neighborhood. A node failure changes the graph itself, so the center
-may move, and even the self-stabilizing variant reacts by reconverging over
-the whole network rather than localizing the repair to the failure.
-\merw only ever stores distances to immediate neighbors, and \merwft recovers
-from a single node failure by a warm-started re-election costing
-$O(\log(N/\epsilon))$ rounds on an expander, without touching the rest of the
-network.
+\paragraph{Minimum-diameter spanning trees.} A routing tree's depth is what
+sets our communication overhead, so the natural baseline is a tree chosen to
+minimize it. \cite{hakimi1964} introduced the absolute center of a graph, the
+point minimizing the maximum distance to all vertices, which may lie in the
+interior of an edge rather than at a vertex; \cite{hassintamir1991} showed that
+a shortest-path tree rooted at the absolute center is a minimum diameter
+spanning tree (MDST), reducing MDST construction to a center computation.
+Distributed constructions follow this route \citep{bui2013distributed}, as does
+a self-stabilizing variant that reconverges after a fault
+\citep{butelle1995selfstabilizing}. The difference from \merw is what a node has
+to know. Locating the center is a global computation over all-pairs distances:
+in the distributed algorithm of \cite{bui2013distributed} every node ends up
+holding distance information about the whole graph, where \merw uses only its
+neighbors, and a fault can move the center, so the self-stabilizing variant
+repairs by reconverging over the network rather than localizing to the failure.
+\merw gives up optimal depth to avoid this. Its nodes exchange values only with
+immediate neighbors, and \merwft repairs a failure by a warm-started
+re-election whose cost is governed by the spectral gap. What that trade costs
+in depth is exactly the $D$ versus $D'$ gap we quantify later.
 
 \section{EigenTree: The Protocol}
+
+\merw runs on any connected undirected graph, but its costs are stated in the
+regime where distributed coordination is normally posed: the \emph{expander
+regime}.
+
+\begin{definition}[Expander regime]
+\label{def:expander}
+$G$ is in the expander regime if its algebraic connectivity $\lambda_2$ (the
+second-smallest eigenvalue of the Laplacian) is bounded away from $0$ by a
+constant independent of $N$.
+\end{definition}
+
+This regime covers most graphs of interest. Random graphs sit here with high
+probability (Erd\H{o}s--R\'{e}nyi above the connectivity threshold, and random
+regular graphs), and distributed algorithms are routinely analyzed on expanders
+\citep{meng2024survey} because the pathological graphs, long paths and thin
+bottlenecks, slow down every distributed protocol: the convergence time of
+distributed averaging is set by the graph's spectral gap, which the same
+bottlenecks collapse \citep{boyd2006randomized}.
 
 \subsection{Hub Emergence and Routing}
 \merw is based on the eigenvector centrality; we describe here how we obtain
@@ -242,12 +248,14 @@ flooded value $m_i$, initialized to $\tilde\psi_i$, and a pointer
 $\mathrm{via}_i$ initialized to itself. Every round, $i$ broadcasts $m_i$ to
 its neighbors; if some neighbor $j$ reports $m_j > m_i$, $i$ sets $m_i
 \leftarrow m_j$ and $\mathrm{via}_i \leftarrow j$. Every node runs this for a
-fixed number of rounds $T_{\mathrm{flood}}$, a protocol hyperparameter set to
-any value at least $\mathrm{diam}(G)+1$; no node needs to know $\mathrm{diam}(G)$
-itself, only this common round budget, and because the budget is shared and the
+fixed number of rounds $T_{\mathrm{flood}}$, set to any value at least
+$\mathrm{diam}(G)+1$: flooding propagates the global maximum one hop per round,
+so this many rounds suffice for it to reach every node. In the expander regime
+$\mathrm{diam}(G) = O(\log N)$, so $T_{\mathrm{flood}} = O(\log N)$, the same
+$O(\log N)$ budget as the power iteration and the gossip rounds. No node needs
+$\mathrm{diam}(G)$ itself, only this shared budget; because it is shared and the
 rounds are synchronous, all nodes finish flooding on the same round and begin
-the first pull together. Since flooding propagates the global maximum one hop
-per round, $\mathrm{diam}(G)+1$ rounds suffice for it to reach every node. At
+the first pull together. At
 convergence, $m_i$ equals the global maximum $\tilde\psi_{h^\star}$ everywhere,
 and $\mathrm{via}_i$ points one step closer to $h^\star$; any node whose own
 $\tilde\psi_i$ was a local but not the global maximum re-routes toward
@@ -301,9 +309,9 @@ The framing we just described is a Maximal Entropy Random Walk (MERW) on $G$
 probabilities make every path of a given length between two fixed nodes equally
 likely, unlike the standard random walk, which only weighs each single step by
 degree and has no notion of the paths it is part of. Because MERW weighs entire
-paths equally, a node's stationary probability under MERW reflects its
-participation in long paths throughout the graph, not just how many neighbors
-it has.
+paths equally, a node's stationary probability under MERW measures how much of
+the graph's long-path traffic runs through it, where an ordinary walk would
+measure only its degree.
 
 MERW's stationary distribution is proportional to the eigenvector centrality,
 and this is the link between MERW and \merw. Computing the eigenvector
@@ -367,73 +375,44 @@ would minimize tree depth and give a minimum diameter spanning tree (MDST)
 \citep{hakimi1964,hassintamir1991}. Thus the tree depth $D =
 \mathrm{ecc}_G(h^\star)$, which sets the $O(D)$ communication overhead of
 Theorem~\ref{thm:coordinator}, can exceed $D' = R(G)$, the depth an MDST would
-achieve. We bound this gap in two regimes, first an unrestricted worst case and
-then two conditions, one on degree and one on spectral expansion, under which
-the gap is small.
+achieve. We bound this gap: first the worst case, on graphs far from the
+expander regime, then the expander regime itself, where the gap is small.
 
 \paragraph{Worst case.} Consider a graph formed by attaching a high-degree cluster
 to the end of a long path: $h^\star$ settles inside the cluster, since that is
 where eigenvector centrality concentrates, while the true center sits near the
-path's midpoint. As the path grows, $D$ approaches $2D'$, matching the tight
-general bound $D' \geq D(G)/2$ that holds for \emph{any} choice of root
-\citep{hakimi1964}; \merw's hub does no better here than an arbitrary one. This
-construction has a cut vertex on the path.
+path's midpoint. As the path grows, $D$ approaches $2D'$, the extreme allowed by
+$D' \geq \mathrm{diam}(G)/2$, which holds for \emph{any} choice of root;
+\merw's hub does no better here than an arbitrary one. This
+graph is the opposite of an expander: the long path makes it easy to cut in
+two, so its $\lambda_2$ shrinks toward $0$ as the path grows, and it falls
+outside the regime of Definition~\ref{def:expander}. The rest of this section
+shows the gap is small inside that regime.
 
-The bound below needs $h^\star$ to have enough neighbors that any other node is
-reachable in a couple of hops, so we first show that being the highest
-eigenvector centrality node already guarantees a minimum degree, with no extra
-assumption on $G$.
-
-\begin{proposition}[Hub degree lower bound]
-\label{prop:hubdeg}
-The hub's degree is at least the graph's spectral radius: $\deg(h^\star) \geq \lambda$.
-\end{proposition}
-
-\begin{theorem}[Dense graphs: depth at most 2]
-\label{thm:mdst-gap}
-Let $\delta_{\bar N}(h^\star) = \min_{u \notin \mathcal{N}_G(h^\star)\cup\{h^\star\}} \deg(u)$ be the smallest degree among the nodes $h^\star$ is not directly connected to. If $\deg(h^\star) + \delta_{\bar N}(h^\star) \geq N$, then $D \leq 2$.
-\end{theorem}
-
-\begin{proof}
-Take any $u \neq h^\star$ with $u \notin \mathcal{N}_G(h^\star)$; every neighbor of $h^\star$ already has $d(h^\star,\cdot)=1$, so it suffices to show $d(h^\star,u)\leq2$ for such $u$. Both $\mathcal{N}_G(h^\star)$ and $\mathcal{N}_G(u)$ are subsets of $V\setminus\{h^\star,u\}$, and since $\deg(u)\geq\delta_{\bar N}(h^\star)$, their sizes satisfy $|\mathcal{N}_G(h^\star)|+|\mathcal{N}_G(u)| \geq \deg(h^\star)+\delta_{\bar N}(h^\star) \geq N$ by the hypothesis. Since $|V\setminus\{h^\star,u\}|=N-2 < N$, the two neighbor sets cannot be disjoint, so some $w$ is a common neighbor, giving $d(h^\star,u)\leq2$ via $h^\star\text{-}w\text{-}u$.
-\end{proof}
-
-Since $D' \geq 1$ on any connected graph with more than one node,
-Theorem~\ref{thm:mdst-gap} says \merw's tree is at most one hop deeper than the
-true MDST whenever this condition holds. By Proposition~\ref{prop:hubdeg}, the
-hub's degree is at least $\lambda$, so the condition is easier to satisfy the
-more concentrated $G$'s spectral radius is around $h^\star$. It requires only
-$h^\star$ and the nodes outside its immediate neighborhood to be
-well-connected, not every node in $G$.
-
-\paragraph{Well-connected graphs.} Theorem~\ref{thm:mdst-gap}'s hypothesis is a strong density requirement. A weaker condition, the graph's algebraic connectivity $\lambda_2$ (the second-smallest Laplacian eigenvalue) bounded away from $0$, already bounds the gap logarithmically in $N$, with no density requirement on individual nodes.
-
-\begin{theorem}[Depth gap under bounded algebraic connectivity]
-\label{thm:mdst-gap-spectral}
-Let $\lambda_2$ be the algebraic connectivity of $G$ (the second-smallest eigenvalue of the graph Laplacian $L = \mathrm{Diag}(\deg) - A$) and $\lambda_\infty$ its largest Laplacian eigenvalue. Then
-\[
-D - D' \leq \left\lceil \frac{\lambda_\infty + \lambda_2}{4\lambda_2} \ln(N-1) \right\rceil.
-\]
-\end{theorem}
-
-This bound does not depend on $h^\star$'s own degree, only on the graph's
-overall expansion, so it holds much more broadly than Theorem~\ref{thm:mdst-gap},
-including on sparse graphs. It grows with $N$ instead of staying at 2, and it
-fails exactly on graphs like a long path or cycle, where $\lambda_2$ vanishes as
-$N$ grows and the worst case from earlier is observed. Theorem~\ref{thm:mdst-gap}
-already covers Erd\H{o}s--R\'{e}nyi graphs with no extra proof: for $G(N,p)$
-with $p$ above $1/2$ by a constant margin, degrees concentrate tightly around
-$(N-1)p$, so its hypothesis holds with probability approaching 1, and $D-D'$ is
-at most one hop with high probability. \merw does not try to avoid the worst
-case directly, since doing so would need the same all-pairs distances that
-exact MDST construction depends on, which is the global knowledge \merw is
+\paragraph{The expander regime.} Inside the regime of
+Definition~\ref{def:expander} the gap is small, and this follows from known
+spectral bounds rather than any new argument. Mohar's diameter bound
+\citep{mohar1991} gives $\mathrm{diam}(G) \leq \lceil \frac{\lambda_\infty +
+\lambda_2}{4\lambda_2}\ln(N-1)\rceil \cdot 2$, and combined with the elementary
+$D \leq \mathrm{diam}(G)$ and $D' \geq \mathrm{diam}(G)/2$ this yields
+$D - D' \leq \lceil \frac{\lambda_\infty + \lambda_2}{4\lambda_2}\ln(N-1)\rceil$
+(supplementary). When $\lambda_2$ is bounded away from $0$ the coefficient is a
+constant, so $D - D' = O(\log N)$: \merw's tree is a logarithmic number of hops
+deeper than the true MDST, a constant-factor overhead since $D'$ is itself
+$\Omega(\log N)$ there. This asks nothing about individual degrees, so it covers
+sparse expanders too, and it degrades to the worst case exactly as
+$\lambda_2 \to 0$. When the graph is dense enough that
+$\deg(h^\star) + \min_{u \notin \mathcal{N}_G(h^\star)} \deg(u) \geq N$, the gap
+tightens all the way to $D - D' \leq 1$ by a pigeonhole argument
+(supplementary), which holds with high probability on Erd\H{o}s--R\'{e}nyi
+graphs with $p$ above $1/2$ by a constant margin. \merw does not try to avoid
+the worst case directly, since doing so would need the same all-pairs distances
+that exact MDST construction depends on, which is the global knowledge \merw is
 built to avoid.
 
-$\lambda_2$ is also what governs the cost of the fault tolerance in
-Section~\ref{sec:ft}: a lost node is repaired by a warm-started re-election
-whose cost is set by the same spectral gap. When $\lambda_2$ is bounded away
-from $0$, that repair is cheap; on sparse or path-like graphs, where $\lambda_2$
-is small, it is not.
+The same $\lambda_2$ governs fault tolerance (Section~\ref{sec:ft}): inside the
+expander regime a lost node is repaired by a cheap warm-started re-election,
+and off it the repair is as slow as the tree is deep.
 
 \subsection{Instantiation: Regret Minimization}
 \label{sec:regret}
@@ -460,11 +439,7 @@ elimination schedule and $\epsilon_r = 2^{-r}$ ($t_0 = 0$), and its local
 contribution is the vector of its own reward sums over that round,
 $b_i = (b_{i,k})_{k \in S_{r-1}}$. Every node computes $L_r$ independently
 from this formula using the shared, known $N$, so no per-round negotiation is
-needed, and every node computes the same $L_r$. This is unlike \merw-UCB,
-whose UCB bonus depends only on the total-pull count $P$ as it is actually
-observed through the downlink, never on $N$ directly: BAI needs $N$ to compute
-the very first $L_1$, before any uplink has happened, while UCB never needs it
-at all. The hub sums the aggregate $B_k = \sum_i b_{i,k}$ into the
+needed, and every node computes the same $L_r$. The hub sums the aggregate $B_k = \sum_i b_{i,k}$ into the
 empirical mean $\bar\mu_k = B_k / (N L_r)$ for each $k \in S_{r-1}$, eliminates
 every arm more than $\epsilon_r$ below the best empirical mean,
 $S_r = \{k \in S_{r-1} : \bar\mu_k \geq \max_{k'} \bar\mu_{k'} - \epsilon_r\}$,
@@ -515,13 +490,15 @@ elimination round.
 \section{Fault Tolerance}
 \label{sec:ft}
 
-A centralized system like the one identified by \merw has one obvious weakness:
-if the hub fails, the system fails with it, since every agent's information
-passes through that single point. More generally, the failure of any non-leaf
-node can break the routing tree $\mathcal{T}$, and thus the protocol. We
+Centralization is exactly what cooperative learning moved away from, and one of
+the reasons is fragility: a central coordinator is a single point of failure. By
+reconstructing a coordinator, \merw reintroduces this weakness. If the hub
+fails, the system fails with it, since every agent's information passes through
+that single point, and more generally the failure of any non-leaf node can break
+the routing tree $\mathcal{T}$, and thus the protocol. We
 describe a fault-tolerant variant, \merwft, that mitigates the effect of node
-deletion for sufficiently well-connected graphs, as per
-Sec.~\ref{sec:mdst-gap}. Under \merwft, any single node $v\in G$ can fail, and
+deletion in the expander regime of Definition~\ref{def:expander}. Under
+\merwft, any single node $v\in G$ can fail, and
 the surviving nodes can efficiently recompute the eigenvector centrality and
 thus rebuild a new routing tree that spans the surviving graph $G\setminus \{v\}$.
 
@@ -532,46 +509,53 @@ Removing a node $v$ deletes row and column $v$ of the adjacency matrix:
 \[
 	\tilde A = A + E, \qquad E = -\bigl(A e_v e_v^\top + e_v e_v^\top A\bigr),
 \]
-a symmetric perturbation of rank at most $2$. Power iteration on $\tilde A$ needs no
-change of procedure: a surviving node's update $\tilde w_i = \sum_{j\sim i}
-w_j$ simply stops including the dead neighbor. So a warm start is natural,
-survivors keep their converged $w_i$ and continue on $\tilde A$ instead of
-resetting to $w_i = 1$.
+a symmetric perturbation of rank at most $2$. Power iteration on $\tilde A$ needs
+no change of procedure: a surviving node's update $\tilde w_i = \sum_{j\sim i}
+w_j$ simply stops including the dead neighbor. So the survivors keep their
+converged $w_i$ and continue on $\tilde A$ instead of resetting to $w_i = 1$: a
+warm start on a slightly changed graph, running the same election as at
+initialization.
 
-By Davis--Kahan \citep{daviskahan1970}, the eigenvector's movement is bounded
-by $\|E\|_2/\gamma = \sqrt{\deg(v)}/\gamma$, where $\gamma$ is $\tilde A$'s
-eigenvalue gap: largest when $v$ is the hub, smallest for a low-degree node.
-Reaching tolerance $\epsilon$ takes $O(\log(\sqrt{\deg(v)}/(\gamma\epsilon)))$
-rounds. On an expander $\gamma$ is bounded away from $0$, so it is a constant
-and the bound is $O(\log(\sqrt{N}/\epsilon))$, using $\deg(v) \leq N$; since
-$\log\sqrt{N} = \tfrac12\log N$, this is the same order as
-$O(\log(N/\epsilon))$, against $\tau_{\mathrm{init}}$ for a cold start. The
-well-connected regime of Section~\ref{sec:mdst-gap} is where re-election is
-cheap.
+They run it for the same fixed budget too, $\tau_{\mathrm{init}} = O(\log N)$
+rounds. This budget is enough. By Davis--Kahan \citep{daviskahan1970} the warm
+start begins at angle at most $\|E\|_2/\gamma = \sqrt{\deg(v)}/\gamma$ from the
+new eigenvector, where $\gamma$ is $\tilde A$'s eigenvalue gap, hence at most
+$\sqrt{N}/\gamma$ no matter which node failed, and $O(\log N)$ contraction rounds
+close that angle to tolerance. It is also the only budget the survivors can set
+without central coordination: a budget tuned to the failure would need
+$\deg(v)$, which only $v$'s neighbors know and $v$ cannot report once dead, and
+$\gamma$, which no node holds, whereas $\tau_{\mathrm{init}}$ follows from $N$
+alone, so all survivors stop on the same round.
+
+Because the budget is fixed and the contraction rate is the same either way, the
+warm start does not shorten the re-election; it makes the result more accurate.
+Starting at angle $\sqrt{\deg(v)}/\gamma$ instead of the $\Theta(1)$ of a uniform
+restart, the survivors land closer to the new centralities after the same
+$\tau_{\mathrm{init}}$ rounds, by a factor $\gamma/\sqrt{\deg(v)}$, at no cost.
+The gain is largest when the failed node has low degree.
 
 \begin{proposition}[Warm-started re-election]
 \label{prop:reelection}
-After any node failure, the warm-started power iteration on $\tilde A$
+After any single node failure, the warm-started power iteration on $\tilde A$
 converges to the leading eigenvector of $\tilde A$ from the pre-failure
-$\tilde\psi$, and reaching tolerance $\epsilon$ takes
-$O\bigl(\log(\sqrt{\deg(v)}/(\gamma\epsilon))/\log(\lambda_1/\lambda_2)\bigr)$
-rounds, where $\gamma$ is the eigenvalue gap of $\tilde A$. On a graph with
-$\lambda_2$ bounded away from $0$, this is $O(\log(N/\epsilon))$.
+$\tilde\psi$. After the fixed budget $\tau_{\mathrm{init}} = O(\log N)$, the
+residual angle is at most
+$(\lambda_2/\lambda_1)^{\tau_{\mathrm{init}}}\cdot\sqrt{\deg(v)}/\gamma$,
+where $\gamma$ is the eigenvalue gap of $\tilde A$, against
+$(\lambda_2/\lambda_1)^{\tau_{\mathrm{init}}}\cdot\Theta(1)$ for a cold start
+from uniform. The warm start is therefore never worse, and its advantage is a
+factor $\gamma/\sqrt{\deg(v)}$, largest when the failed node has low degree.
 \end{proposition}
 
-\subsection{The Well-Connected Regime}
-\label{sec:spectral-regime}
-
-The condition for cheap re-election is a spectral gap bounded away from $0$,
-i.e., $G$ is an expander: this is the same condition, through
-$\kappa(G) \geq \lambda_2$ \citep{fiedler1973}, that keeps $G$ connected under
-node removal, and the one that makes the initial hub emergence fast. Expansion,
-not edge count, is what matters: a sparse random regular graph re-elects just
-as cheaply as a dense one, while a dense graph with a near-bottleneck does
-not, since removing a central node can then swing centrality across the
-bottleneck and the warm start is a poor initializer. \merwft is therefore a
-fault-tolerance result for the well-connected regime, which is the regime
-where fault-tolerant coordination is normally posed.
+The expander regime is also what keeps $G$ connected under node removal, through
+$\kappa(G) \geq \lambda_2$ \citep{fiedler1973}, so the one condition of
+Definition~\ref{def:expander} makes re-election both possible and cheap: the
+$O(\log N)$ budget is affordable whatever the warm start contributes.
+What sets the cost is expansion rather than edge count. A sparse random regular
+graph re-elects as cheaply as a dense one, while a dense graph with a
+near-bottleneck does not: $\lambda_2$ is small there, and removing a central
+node can swing centrality across the bottleneck, leaving the warm start a poor
+initializer.
 
 \subsection{Failure Detection and Synchronized Restart}
 \label{sec:sync}
@@ -655,14 +639,14 @@ hub for both.
 
 \begin{figure}
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
+    \includegraphics[width=\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
     \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Top}: group regret vs.\ round. \emph{Bottom}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
     \label{fig:regret_er}
 \end{figure}
 
 \begin{figure}
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
+    \includegraphics[width=\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
     \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Top}: total arm pulls vs.\ $N$. \emph{Bottom}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
     \label{fig:bai_er}
 \end{figure}
@@ -677,7 +661,7 @@ no lasting penalty.
 
 \begin{figure}
     \centering
-    \includegraphics[width=0.95\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T2000_at500-1000-1500.pdf}
+    \includegraphics[width=\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T2000_at500-1000-1500.pdf}
     \caption{Group regret for \merwft on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) with the hub killed at $t=500,1000,1500$. Dashed lines mark failures, dotted lines mark recovery. All three failures are recovered from.}
     \label{fig:ft_regret}
 \end{figure}

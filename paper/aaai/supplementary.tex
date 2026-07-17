@@ -20,6 +20,7 @@
 \newtheorem{lemma}{Lemma}
 \newtheorem{corollary}{Corollary}
 \newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
 
 \pdfinfo{
 /TemplateVersion (2027.1)
@@ -398,7 +399,7 @@ the hub is only the case of largest $\deg(v)$.
 
 \begin{proposition}[Warm-started re-election]
 \label{prop:reelection}
-After any single node failure, the warm-started power iteration on $\tilde A$ converges to the leading eigenvector of $\tilde A$ from the pre-failure $\tilde\psi$, and reaching tolerance $\epsilon$ takes $O\bigl(\log(\sqrt{\deg(v)}/(\gamma\epsilon))/\log(\lambda_1/\lambda_2)\bigr)$ rounds, where $\gamma$ is the eigenvalue gap of $\tilde A$. On a graph with $\lambda_2$ bounded away from $0$, this is $O(\log(N/\epsilon))$.
+After any single node failure, the warm-started power iteration on $\tilde A$ converges to the leading eigenvector of $\tilde A$ from the pre-failure $\tilde\psi$. After the fixed budget $\tau_{\mathrm{init}} = O(\log N)$, the residual angle is at most $(\lambda_2/\lambda_1)^{\tau_{\mathrm{init}}}\cdot\sqrt{\deg(v)}/\gamma$, where $\gamma$ is the eigenvalue gap of $\tilde A$, against $(\lambda_2/\lambda_1)^{\tau_{\mathrm{init}}}\cdot\Theta(1)$ for a cold start from uniform. The warm start is therefore never worse, and its advantage is a factor $\gamma/\sqrt{\deg(v)}$, largest when the failed node has low degree.
 \end{proposition}
 
 \begin{proof}
@@ -411,19 +412,43 @@ Perron--Frobenius, and power iteration converges to it from any start with
 nonzero overlap; the warm start $\tilde\psi$ qualifies, as both vectors are
 strictly positive.
 
-For the rate, the initial angle to the target is bounded by Davis--Kahan
+For the accuracy, the initial angle to the target is bounded by Davis--Kahan
 \citep{daviskahan1970},
 $\sin\Theta(\tilde\psi,\tilde\psi_{\tilde A}) \leq \|E\|_2/\gamma
-= \sqrt{\deg(v)}/\gamma$. Each power-iteration round multiplies the
-component orthogonal to $\tilde\psi_{\tilde A}$ by at most $\lambda_2/\lambda_1$
-relative to the leading one, so the residual angle after $t$ rounds is at most
-$(\lambda_2/\lambda_1)^t\tan\Theta$. Setting this below $\epsilon$ gives
-$t = O(\log(\tan\Theta/\epsilon)/\log(\lambda_1/\lambda_2))
-   = O(\log(\sqrt{\deg(v)}/(\gamma\epsilon))/\log(\lambda_1/\lambda_2))$.
-When $\lambda_2$ is bounded away from $0$, both $\gamma$ and
-$\log(\lambda_1/\lambda_2)$ are $\Omega(1)$ while $\deg(v)\leq N$, so this
-is $O(\log(N/\epsilon))$.
+= \sqrt{\deg(v)}/\gamma$, using $\|E\|_2 = \sqrt{\deg(v)}$ for the rank-2
+perturbation $E$ deleting row and column $v$. Each power-iteration round
+multiplies the component orthogonal to $\tilde\psi_{\tilde A}$ by at most
+$\lambda_2/\lambda_1$ relative to the leading one, so the residual angle after
+$t$ rounds is at most $(\lambda_2/\lambda_1)^t\tan\Theta$.
+
+The survivors run the fixed budget $t = \tau_{\mathrm{init}} = O(\log N)$
+rather than a tolerance-driven number of rounds. This is forced: a budget
+derived from the bound above would require $\deg(v)$, which only $v$'s
+neighbors know and which $v$ cannot report once dead, and $\gamma$, a spectral
+quantity of $\tilde A$ that no node holds. Every node can compute
+$\tau_{\mathrm{init}}$ from $N$ alone, so all survivors finish on the same
+round, exactly as at initialization.
+
+Substituting $t = \tau_{\mathrm{init}}$ and the two initial angles gives the
+claim: the warm start begins at $\tan\Theta \leq \sqrt{\deg(v)}/\gamma$, while
+a cold start from the uniform vector begins at $\tan\Theta = \Theta(1)$, having
+no dependence on the failure. Both contract at the same rate over the same
+budget, so the warm start's residual is smaller by the factor
+$\gamma/\sqrt{\deg(v)}$, and it is never worse. The advantage is largest when
+$\deg(v)$ is small; when $\deg(v) = \Theta(N)$ it narrows to
+$\gamma/\sqrt{N}$, since $\deg(v) \leq N$ always.
 \end{proof}
+
+\begin{remark}
+\label{rem:gamma}
+The bound treats $\gamma$, the eigenvalue gap of the \emph{perturbed} matrix
+$\tilde A$, as $\Omega(1)$ in the expander regime. This is a property of
+$\tilde A$, not of $A$, so it requires the gap to survive the failure. Since
+$E$ has rank at most $2$, Weyl's inequality moves each eigenvalue of $A$ by at
+most $\|E\|_2 = \sqrt{\deg(v)}$, which bounds the perturbed gap in terms of the
+original one but does not by itself keep it away from $0$ when $\deg(v)$ is
+large. A failure-independent lower bound on $\gamma$ is left for future work.
+\end{remark}
 
 \subsection{Recovery}
 

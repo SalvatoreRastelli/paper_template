@@ -36,6 +36,11 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.style.use(Path(__file__).resolve().parent / "merw.mplstyle")
+# AAAI single-column width in inches (\columnwidth = 239.39pt / 72.27pt-per-in).
+# Paper figures are authored at exactly this width and included at
+# width=\columnwidth, so a point in matplotlib equals a point on the page.
+COLUMN_WIDTH_IN = 3.317
 import numpy as np
 import networkx as nx
 warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
@@ -986,7 +991,7 @@ BAI_N_VALS = [10, 20, 30, 40, 50]
 
 BAI_STYLES = {
     "Hillel-BAI":       ("C3", "o", "Hillel-BAI"),
-    EIGENTREE_BAI_NAME: ("C2", "s", EIGENTREE_BAI_NAME),
+    EIGENTREE_BAI_NAME: ("C2", ".", EIGENTREE_BAI_NAME),
 }
 
 
@@ -1069,8 +1074,7 @@ def load_bai_csv(graph_type, K):
 
 def plot_bai(results, graph_type, K, n_runs, delta=0.05):
     N_vals = next(iter(results.values()))["N_vals"]
-    fig, axes = plt.subplots(2, 1, figsize=(6, 7.5))
-    info = f"$K={K}$, $\\delta={delta}$, {n_runs} runs (error bars: SEM)"
+    fig, axes = plt.subplots(2, 1, figsize=(COLUMN_WIDTH_IN, 4.1))
 
     handles, labels = [], []
     for name, (color, marker, label) in BAI_STYLES.items():
@@ -1084,10 +1088,8 @@ def plot_bai(results, graph_type, K, n_runs, delta=0.05):
         handles.append(line)
         labels.append(label)
 
-    axes[0].set_xlabel("Number of agents $N$", fontsize=15)
-    axes[0].set_ylabel("Total arm pulls", fontsize=15)
-    axes[0].set_title(f"BAI sample complexity vs. $N$\n{info}", fontsize=16)
-    axes[0].tick_params(labelsize=13)
+    axes[0].set_xlabel("Number of agents $N$")
+    axes[0].set_ylabel("Total arm pulls")
     axes[0].grid(True, alpha=0.3)
 
     # --- Plot 2: pulls per agent vs N (should decrease for Hillel: ~1/sqrt(N)) ---
@@ -1102,15 +1104,18 @@ def plot_bai(results, graph_type, K, n_runs, delta=0.05):
                          label=label, color=color, marker=marker,
                          linewidth=2.2, capsize=4, markersize=7)
 
-    axes[1].set_xlabel("Number of agents $N$", fontsize=15)
-    axes[1].set_ylabel("Pulls per agent", fontsize=15)
-    axes[1].set_title(f"BAI per-agent sample complexity vs. $N$\n{info}", fontsize=16)
-    axes[1].tick_params(labelsize=13)
+    axes[1].set_xlabel("Number of agents $N$")
+    axes[1].set_ylabel("Pulls per agent")
     axes[1].grid(True, alpha=0.3)
 
-    fig.legend(handles, labels, loc="lower center", ncol=len(labels), fontsize=15,
+    for ax in axes:
+        ax.ticklabel_format(axis="both", style="sci", scilimits=(-2, 3))
+        for lbl in ax.get_yticklabels():
+            lbl.set_rotation(45)
+
+    fig.tight_layout(rect=[0, 0.08, 1, 1])
+    fig.legend(handles, labels, loc="lower center", ncol=len(labels),
                bbox_to_anchor=(0.5, 0.0))
-    fig.tight_layout(rect=[0, 0.06, 1, 1])
     out = BAI_DIR / f"merw_ucb_bai_{graph_type}_K{K}.pdf"
     fig.savefig(out)
     plt.close(fig)

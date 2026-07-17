@@ -33,6 +33,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 plt.style.use(Path(__file__).resolve().parent / "merw.mplstyle")
+# AAAI single-column width in inches (\columnwidth = 239.39pt / 72.27pt-per-in).
+# Paper figures are authored at exactly this width and included at
+# width=\columnwidth, so a point in matplotlib equals a point on the page.
+COLUMN_WIDTH_IN = 3.317
 import numpy as np
 import networkx as nx
 warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
@@ -826,7 +830,7 @@ def plot_trees(data, graph_type, N, K, T, tag):
 
 
 def plot_ft(data, graph_type, N, K, T, tag):
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(COLUMN_WIDTH_IN, 2.4))
     ts = np.arange(1, len(data["group_ft"]) + 1)
 
     ax.plot(ts, data["group_ft"], label="EigenTree-FT", color="C2", linewidth=1.8)
@@ -845,12 +849,9 @@ def plot_ft(data, graph_type, N, K, T, tag):
            transform=ax.transAxes, fontsize=9, va="top", ha="left",
            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.9))
 
-    fail_str = ",".join(str(t) for t in data["fail_schedule"])
     ax.set_xlabel("Round $t$")
     ax.set_ylabel(r"Group cumulative regret $\sum_i R_i(t)$")
-    ax.set_title(f"EigenTree-FT under repeated hub failure -- {graph_type.upper()} graph\n"
-                 f"$N={N}$, $K={K}$, $T={T}$, hub fails at $t={fail_str}$")
-    ax.legend(fontsize=9, loc="lower right")
+    ax.legend(loc="lower right")
     ax.grid(True, alpha=0.3)
 
     fig.tight_layout()
