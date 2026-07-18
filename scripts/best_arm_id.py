@@ -1084,7 +1084,7 @@ def plot_bai(results, graph_type, K, n_runs, delta=0.05):
         stds_arr = np.array(results[name]["std"])
         line = axes[0].errorbar(N_vals, means_arr, yerr=stds_arr,
                                 label=label, color=color, marker=marker,
-                                linewidth=2.2, capsize=4, markersize=7)
+                                linewidth=1.2, capsize=3, markersize=5)
         handles.append(line)
         labels.append(label)
 
@@ -1102,7 +1102,7 @@ def plot_bai(results, graph_type, K, n_runs, delta=0.05):
         per_agent_std = stds_arr / np.array(N_vals)
         axes[1].errorbar(N_vals, per_agent, yerr=per_agent_std,
                          label=label, color=color, marker=marker,
-                         linewidth=2.2, capsize=4, markersize=7)
+                         linewidth=1.2, capsize=3, markersize=5)
 
     axes[1].set_xlabel("Number of agents $N$")
     axes[1].set_ylabel("Pulls per agent")

@@ -11,6 +11,9 @@ axes.titlesize  : 8
 axes.labelsize  : 8
 axes.linewidth  : 0.8
 axes.grid : True
+# Okabe-Ito colorblind-safe cycle: blue, orange, bluish-green, vermillion,
+# sky-blue, reddish-purple, yellow. C0..C6 map to these everywhere.
+axes.prop_cycle : cycler('color', ['0072B2', 'E69F00', '009E73', 'D55E00', '56B4E9', 'CC79A7', 'F0E442'])
 
 xtick.labelsize    : 8
 ytick.labelsize    : 8
@@ -19,7 +22,7 @@ ytick.direction    : in
 xtick.major.width  : 0.8
 ytick.major.width  : 0.8
 
-lines.linewidth  : 1.8
+lines.linewidth  : 1.2
 lines.markersize : 5
 
 legend.fontsize    : 8

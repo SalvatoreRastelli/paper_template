@@ -1134,11 +1134,11 @@ def plot_regret(results, T, N, K, graph_type, n_runs):
         if name not in results:
             continue
         mean_g, std_g, mean_h, std_h, mean_cp = results[name]
-        line, = axes[0].plot(ts, mean_g, label=label, color=color, linestyle=ls, linewidth=2.2)
+        line, = axes[0].plot(ts, mean_g, label=label, color=color, linestyle=ls)
         axes[0].fill_between(ts, mean_g - std_g, mean_g + std_g, color=color, alpha=0.15)
         reg_vs_pulls = np.interp(pull_axis, mean_cp, mean_g)
         std_vs_pulls = np.interp(pull_axis, mean_cp, std_g)
-        axes[1].plot(pull_axis, reg_vs_pulls, label=label, color=color, linestyle=ls, linewidth=2.2)
+        axes[1].plot(pull_axis, reg_vs_pulls, label=label, color=color, linestyle=ls)
         axes[1].fill_between(pull_axis, reg_vs_pulls - std_vs_pulls,
                              reg_vs_pulls + std_vs_pulls, color=color, alpha=0.15)
         handles.append(line)

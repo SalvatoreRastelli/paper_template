@@ -833,7 +833,7 @@ def plot_ft(data, graph_type, N, K, T, tag):
     fig, ax = plt.subplots(figsize=(COLUMN_WIDTH_IN, 2.4))
     ts = np.arange(1, len(data["group_ft"]) + 1)
 
-    ax.plot(ts, data["group_ft"], label="EigenTree-FT", color="C2", linewidth=1.8)
+    ax.plot(ts, data["group_ft"], label="EigenTree-FT", color="C2")
 
     for i, tf in enumerate(data["fail_schedule"]):
         ax.axvline(tf, color="black", linestyle="--", linewidth=1.0, alpha=0.6)
@@ -850,7 +850,7 @@ def plot_ft(data, graph_type, N, K, T, tag):
            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.9))
 
     ax.set_xlabel("Round $t$")
-    ax.set_ylabel(r"Group cumulative regret $\sum_i R_i(t)$")
+    ax.set_ylabel(r"$\sum_i R_i(t)$")
     ax.legend(loc="lower right")
     ax.grid(True, alpha=0.3)
 
