@@ -867,7 +867,7 @@ def run_experiment(n_runs, T, N, K, graph_type, sigma, c, n_workers, nu=1.0, see
     styles = {
         "UCB-Ind":          ("C0", "-",  "UCB-Ind (no comm.)"),
         "Coop-UCB2":        ("C1", "--", "Coop-UCB2"),
-        EIGENTREE_UCB_NAME: ("C2", "-",  EIGENTREE_UCB_NAME),
+        EIGENTREE_UCB_NAME: ("C2", "-",  "EigenTree-UCB"),
         "Hillel":           ("C3", ":",  "Hillel (succ. elim.)"),
     }
 

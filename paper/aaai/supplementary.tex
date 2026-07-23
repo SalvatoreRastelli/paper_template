@@ -28,9 +28,6 @@
 
 \setcounter{secnumdepth}{2}
 
-\newcommand{\merw}{EigenTree\xspace}
-\newcommand{\merwft}{EigenTree-FT\xspace}
-
 \title{Supplementary Material:\\EigenTree: a Centralizing Communication Protocol\\for Decentralized Multi-Agent Multi-Armed Bandit}
 \author{
     Anonymous Submission
@@ -154,10 +151,10 @@ of decisions itself.
 \label{sec:mdst-gap}
 
 Throughout this section, $D = \mathrm{ecc}_G(h^\star)$ denotes the height
-of the \merw routing tree, equivalently the eccentricity of $h^\star$ in
+of the EigenTree routing tree, equivalently the eccentricity of $h^\star$ in
 $G$. $D' = R(G) = \min_{v\in V}\mathrm{ecc}_G(v)$ denotes the radius of
 $G$: the height achieved by rooting a shortest-path tree at $G$'s absolute
-center, a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1991}.
+center, a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1995}.
 
 \begin{proposition}[Hub degree lower bound]
 \label{prop:hubdeg}
@@ -221,23 +218,16 @@ contradict $X\cup Y\subseteq Z$. So there exists $w \in
 $h^\star - w - u$, hence $d(h^\star,u)\leq 2$.
 \end{proof}
 
-\begin{theorem}[Depth gap under bounded algebraic connectivity]
+\begin{theorem}[Depth gap in terms of diameter]
 \label{thm:mdst-gap-spectral}
-Let $\lambda_2$ be the algebraic connectivity of $G$ (the second-smallest eigenvalue of the graph Laplacian $L = \mathrm{Diag}(\deg) - A$) and $\lambda_\infty$ its largest Laplacian eigenvalue. Then
-\[
-D - D' \leq \left\lceil \frac{\lambda_\infty + \lambda_2}{4\lambda_2} \ln(N-1) \right\rceil.
-\]
+For any connected graph $G$, $D - D' \leq \mathrm{diam}(G)/2$. In the expander
+regime, where $\lambda_2$ is bounded away from $0$, $\mathrm{diam}(G) = O(\log N)$,
+so $D - D' = O(\log N)$.
 \end{theorem}
 
 \begin{proof}
-Mohar's diameter bound \citep{mohar1991}, Theorem 2.6 of that paper
-instantiated at the constant giving the cleanest closed form, states that
-for any connected graph $G$ on $N$ vertices,
-\[
-\mathrm{diam}(G) \leq 2\left\lceil \frac{\lambda_\infty+\lambda_2}{4\lambda_2}\ln(N-1)\right\rceil.
-\]
-We combine this with two elementary facts about eccentricity that hold for
-\emph{any} connected graph and any choice of root.
+We use two elementary facts about eccentricity that hold for \emph{any}
+connected graph and any choice of root.
 
 $D = \mathrm{ecc}_G(h^\star) \leq \mathrm{diam}(G)$. No single vertex's
 eccentricity can exceed the graph's overall diameter: the diameter is the
@@ -251,17 +241,18 @@ gives $\mathrm{diam}(G) = d(u,v) \leq d(u,c^\star)+d(c^\star,v) \leq
 2\,\mathrm{ecc}_G(c^\star) = 2D'$, so $D' \geq \mathrm{diam}(G)/2$.
 
 Combining,
-\begin{align*}
-D - D' &\leq \mathrm{diam}(G) - \frac{\mathrm{diam}(G)}{2} = \frac{\mathrm{diam}(G)}{2} \\
-&\leq \left\lceil \frac{\lambda_\infty+\lambda_2}{4\lambda_2}\ln(N-1)\right\rceil. \qedhere
-\end{align*}
+\[
+D - D' \leq \mathrm{diam}(G) - \frac{\mathrm{diam}(G)}{2} = \frac{\mathrm{diam}(G)}{2}.
+\]
+In the expander regime $\lambda_2$ is bounded away from $0$, which forces
+$\mathrm{diam}(G) = O(\log N)$ \citep{mohar1991}, giving $D - D' = O(\log N)$.
 \end{proof}
 
 \section{Instantiations: Regret and Best Arm Identification}
 
 \begin{corollary}[Regret matches centralized UCB]
 \label{cor:regret}
-Under the \merw relay protocol, the leading term of the expected group
+Under the EigenTree relay protocol, the leading term of the expected group
 cumulative regret matches a centralized UCB agent on $P$ total pulls, with
 $P = \Theta(NT/(2D+1))$.
 \end{corollary}
@@ -291,11 +282,11 @@ $\Theta(T/(2D+1))$, so $P = \Theta(NT/(2D+1))$.
 
 \begin{corollary}[BAI sample complexity matches Hillel]
 \label{cor:bai}
-The total number of arm pulls required by \merw-BAI to identify $a^\star$ with probability $\geq 1-\delta$ is identical to Hillel's algorithm; the only overhead is $2D$ extra time steps per elimination round.
+The total number of arm pulls required by EigenTree-BAI to identify $a^\star$ with probability $\geq 1-\delta$ is identical to Hillel's algorithm; the only overhead is $2D$ extra time steps per elimination round.
 \end{corollary}
 
 \begin{proof}
-\merw-BAI uses exactly Hillel's Algorithm 3 pull schedule $L_r = \lceil t_r
+EigenTree-BAI uses exactly Hillel's Algorithm 3 pull schedule $L_r = \lceil t_r
 - t_{r-1}\rceil$ and elimination rule, eliminate arms with estimated mean
 below the round-$r$ threshold $\epsilon_r$, applied to the hub's aggregate
 statistics rather than an all-to-all broadcast. Instantiate
@@ -308,7 +299,7 @@ number of pulls $L_r$ per round. The schedule depends only on
 $N,K,\delta,r$, all known in advance, so no agent needs to learn anything
 to determine its own pull count. The elimination decision depends only on
 this aggregate, so the sequence of surviving sets $S_1 \supseteq S_2
-\supseteq \cdots$ produced by \merw-BAI is identical to Hillel's, round for
+\supseteq \cdots$ produced by EigenTree-BAI is identical to Hillel's, round for
 round, and the total number of pulls until $|S_r|=1$ is identical.
 
 The only addition is communication. Each round $r$ requires $D$ uplink

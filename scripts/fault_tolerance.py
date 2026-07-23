@@ -833,21 +833,14 @@ def plot_ft(data, graph_type, N, K, T, tag):
     fig, ax = plt.subplots(figsize=(COLUMN_WIDTH_IN, 2.4))
     ts = np.arange(1, len(data["group_ft"]) + 1)
 
-    ax.plot(ts, data["group_ft"], label="EigenTree-FT", color="C2")
+    ax.plot(ts, data["group_ft"], label="EigenTree-UCB", color="C2")
 
     for i, tf in enumerate(data["fail_schedule"]):
-        ax.axvline(tf, color="black", linestyle="--", linewidth=1.0, alpha=0.6)
-        ax.text(tf, ax.get_ylim()[1] * 0.02, "  fail", fontsize=7, rotation=90,
-                va="bottom", ha="left")
-    for rr in data["recovery_rounds"]:
-        ax.axvline(rr, color="C2", linestyle=":", linewidth=1.0, alpha=0.6)
-
-    n_fail = len(data["fail_schedule"])
-    n_recovered = len(data["recovery_rounds"])
-    ax.text(0.02, 0.98,
-           f"{n_recovered}/{n_fail} failures recovered from",
-           transform=ax.transAxes, fontsize=9, va="top", ha="left",
-           bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.9))
+        ax.axvline(tf, color="black", linestyle="--", linewidth=1.0, alpha=0.6,
+                   label="hub failure" if i == 0 else None)
+    for i, rr in enumerate(data["recovery_rounds"]):
+        ax.axvline(rr, color="C4", linestyle=":", linewidth=1.0, alpha=0.8,
+                   label="recovery" if i == 0 else None)
 
     ax.set_xlabel("Round $t$")
     ax.set_ylabel(r"$\sum_i R_i(t)$")

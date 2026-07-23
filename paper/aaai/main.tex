@@ -32,8 +32,6 @@
 \setcounter{secnumdepth}{2}
 
 
-\newcommand{\merw}{EigenTree\xspace}
-\newcommand{\merwft}{EigenTree-FT\xspace}
 \newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
 
 % \title{EigenTree: A Decentralized Communication Protocol Achieving Centralized Multi-Armed Bandit Results}
@@ -53,25 +51,27 @@
 	Centralized learning achieves the best statistical performance by
 	aggregating all observations, but such global coordination is unavailable
 	in decentralized cooperative systems.
-	We propose \merw, a decentralized communication protocol on undirected
+	We propose EigenTree, a decentralized communication protocol on undirected
 	graphs that establishes, from purely local interactions, a coordinator
 	among the agents.
-	\merw uses eigenvector centrality to 1) choose the most central node as
+	EigenTree uses eigenvector centrality to 1) choose the most central node as
 	coordinator, and 2) construct a routing tree, rooted at the coordinator
 	node, which spans the graph.
-	Information flows according to this routing tree: from leaves to root
+	Within the bottleneck-free regime of expander graphs, construction of the
+	tree converges in $O(\log N)$ rounds, with $N$ the number of nodes. Recovery
+	from a node failure---including the hub, the main weakness of a centralized
+	system---reruns the same construction, so the protocol is fault-tolerant at no
+	added cost.
+	Information flows according to the routing tree: from leaves to root
 	during the aggregation phase, and vice versa during the broadcasting phase.
 	We prove that, under this protocol, a bandit algorithm based on the
 	coordinator's information state achieves the same statistical performance
 	as a centralized instance, at the cost of $O(D)$ communication rounds, with
-	$D$ the tree's diameter.
+	$D$ the tree's depth.
 	The protocol can be used in various decentralized cooperative learning
 	setups, of which we show two---regret minimization and best arm
-	identification---where the method recovers centralized-like results in
+	identification---where the method matches centralized performance in
 	finite time.
-	We further present a fault-tolerant version of the protocol, addressing the
-	coordinator's structural weakness as a single point of failure: any node,
-	including the coordinator, can fail and be replaced by re-election.
 \end{abstract}
 
 \section{Introduction}
@@ -89,7 +89,7 @@ model rich enough that any agent can reach any other in one step (e.g., the
 all-to-all broadcast of \cite{hillel2013distributed}). 
 
 We instead ask whether the communication graph $G$ itself can select which
-agent should coordinate. We propose \merw, a protocol in which a coordinator
+agent should coordinate. We propose EigenTree, a protocol in which a coordinator
 \emph{emerges} from the graph structure through purely local computation, with
 no agent ever seeing the global topology. Each agent's importance is measured by
 its eigenvector centrality, computed via a decentralized gossip protocol
@@ -108,7 +108,7 @@ aggregate. We instantiate these for two standard cooperative multi-armed bandit
 objectives, \emph{regret minimization} and \emph{best arm identification} (BAI),
 and show the hub recovers centralized-level performance in both.
 
-By rebuilding a centralized structure, \merw inherits the weakness that pushed
+By rebuilding a centralized structure, EigenTree inherits the weakness that pushed
 cooperative learning toward decentralization in the first place: a central
 coordinator is a single point of failure, and its failure takes the whole
 system down. We recover robustness without giving up the centralized statistics.
@@ -125,9 +125,10 @@ coordinator is statistically sufficient for any decision rule depending only on
 globally aggregated statistics, instantiated for regret minimization and best
 arm identification, both matching centralized performance up to an $O(D)$
 communication overhead per round, where $D$ is the depth of the induced tree.
-(3) \merwft, a spectral re-election extension tolerating permanent failure of any
-node, hub or non-hub, through a single procedure whose cost is set by the graph's
-spectral gap.
+(3) A demonstration that EigenTree is fault-tolerant by construction: the same
+spectral election that builds the tree also rebuilds it after the permanent
+failure of any node, hub or non-hub, through a single procedure whose cost is
+set by the graph's spectral gap.
 
 \section{Related Work}
 \label{sec:related}
@@ -141,7 +142,7 @@ observations rather than wall-clock rounds. \cite{hillel2013distributed} study
 cooperative BAI under all-to-all broadcast; we build directly on their
 Algorithm 3, replacing the broadcast with hop-by-hop relay over the routing
 tree. All three fix the communication model in advance, symmetric gossip or
-all-to-all; \merw instead derives the communication structure, the hub and
+all-to-all; EigenTree instead derives the communication structure, the hub and
 tree, from the graph itself, and is sufficient for the same class of decision
 rules.
 
@@ -160,7 +161,7 @@ Bully \citep{garciamolina1982} and ring-based extrema-finding
 \citep{changroberts1979}, elects the highest-ID surviving process by
 message-passing; the result depends only on process identities, not on graph
 structure, so a failure is repaired by the same election regardless of which
-node is lost or how central it was. \merwft elects by eigenvector centrality
+node is lost or how central it was. EigenTree elects by eigenvector centrality
 instead. A failure then changes the quantity being elected on: it perturbs the
 adjacency matrix, and the leading eigenvector moves. We treat it as a low-rank
 perturbation and bound that movement by the Davis--Kahan theorem
@@ -176,45 +177,48 @@ special case.
 sets our communication overhead, so the natural baseline is a tree chosen to
 minimize it. \cite{hakimi1964} introduced the absolute center of a graph, the
 point minimizing the maximum distance to all vertices, which may lie in the
-interior of an edge rather than at a vertex; \cite{hassintamir1991} showed that
+interior of an edge rather than at a vertex; \cite{hassintamir1995} showed that
 a shortest-path tree rooted at the absolute center is a minimum diameter
 spanning tree (MDST), reducing MDST construction to a center computation.
-Distributed constructions follow this route \citep{bui2013distributed}, as does
+Distributed constructions follow this route \citep{bui2004distributed}, as does
 a self-stabilizing variant that reconverges after a fault
-\citep{butelle1995selfstabilizing}. The difference from \merw is what a node has
+\citep{butelle1995selfstabilizing}. The difference from EigenTree is what a node has
 to know. Locating the center is a global computation over all-pairs distances:
-in the distributed algorithm of \cite{bui2013distributed} every node ends up
-holding distance information about the whole graph, where \merw uses only its
+in the distributed algorithm of \cite{bui2004distributed} every node ends up
+holding distance information about the whole graph, where EigenTree uses only its
 neighbors, and a fault can move the center, so the self-stabilizing variant
 repairs by reconverging over the network rather than localizing to the failure.
-\merw gives up optimal depth to avoid this. Its nodes exchange values only with
-immediate neighbors, and \merwft repairs a failure by a warm-started
+EigenTree gives up optimal depth to avoid this. Its nodes exchange values only with
+immediate neighbors, and it repairs a failure by a warm-started
 re-election whose cost is governed by the spectral gap. What that trade costs
 in depth is exactly the $D$ versus $D'$ gap we quantify later.
 
 \section{EigenTree: The Protocol}
 
-\merw runs on any connected undirected graph, but its costs are stated in the
+EigenTree runs on any connected undirected graph, but its costs are stated in the
 regime where distributed coordination is normally posed: the \emph{expander
 regime}.
 
 \begin{definition}[Expander regime]
 \label{def:expander}
-$G$ is in the expander regime if its algebraic connectivity $\lambda_2$ (the
-second-smallest eigenvalue of the Laplacian) is bounded away from $0$ by a
-constant independent of $N$.
+A family of graphs $\{G_N\}$ is in the expander regime if its algebraic
+connectivity $\lambda_2$ (the second-smallest eigenvalue of the Laplacian) is
+bounded below by a constant $c > 0$ independent of $N$. We say a graph $G$ is in
+the regime when it belongs to such a family, and treat $c$ as a constant in all
+$N$-dependent bounds.
 \end{definition}
 
 This regime covers most graphs of interest. Random graphs sit here with high
 probability (Erd\H{o}s--R\'{e}nyi above the connectivity threshold, and random
-regular graphs), and distributed algorithms are routinely analyzed on expanders
-\citep{meng2024survey} because the pathological graphs, long paths and thin
-bottlenecks, slow down every distributed protocol: the convergence time of
-distributed averaging is set by the graph's spectral gap, which the same
-bottlenecks collapse \citep{boyd2006randomized}.
+regular graphs), and it is where distributed constructions are fast: distributed
+spanning-tree and routing algorithms run in close to the graph's mixing time
+\citep{ghaffari2017distributed}. The pathological graphs, long paths and thin
+bottlenecks, are exactly the slow ones: the convergence time of distributed
+averaging is set by the graph's spectral gap, which such bottlenecks collapse
+\citep{boyd2006randomized}.
 
 \subsection{Hub Emergence and Routing}
-\merw is based on the eigenvector centrality; we describe here how we obtain
+EigenTree is based on the eigenvector centrality; we describe here how we obtain
 it in a purely decentralized way, and how we use it to construct a routing tree
 that spans the graph $G$.
 
@@ -251,7 +255,7 @@ its neighbors; if some neighbor $j$ reports $m_j > m_i$, $i$ sets $m_i
 fixed number of rounds $T_{\mathrm{flood}}$, set to any value at least
 $\mathrm{diam}(G)+1$: flooding propagates the global maximum one hop per round,
 so this many rounds suffice for it to reach every node. In the expander regime
-$\mathrm{diam}(G) = O(\log N)$, so $T_{\mathrm{flood}} = O(\log N)$, the same
+$\mathrm{diam}(G) = O(\log N)$ \citep{mohar1991}, so $T_{\mathrm{flood}} = O(\log N)$, the same
 $O(\log N)$ budget as the power iteration and the gossip rounds. No node needs
 $\mathrm{diam}(G)$ itself, only this shared budget; because it is shared and the
 rounds are synchronous, all nodes finish flooding on the same round and begin
@@ -285,7 +289,7 @@ If each node $i$ holds a scalar $x_i$ and propagates it toward $h^\star$ one
 \end{proposition}
 
 % \subsection{Information flow perspective}
-\subsection{A Path-Based Motivation for \merw}
+\subsection{A Path-Based Motivation for EigenTree}
 \label{sec:merw}
 
 We provide here a heuristic for choosing eigenvector centrality as our guiding metric.
@@ -314,7 +318,7 @@ the graph's long-path traffic runs through it, where an ordinary walk would
 measure only its degree.
 
 MERW's stationary distribution is proportional to the eigenvector centrality,
-and this is the link between MERW and \merw. Computing the eigenvector
+and this is the link between MERW and EigenTree. Computing the eigenvector
 centrality allows one to identify the hub node $h\in G$ which is most
 frequently traversed.
 
@@ -329,11 +333,11 @@ Let $\mathcal{A}$ be any decision rule whose output at each step depends only on
 Fix any decision round $r$. By Proposition~\ref{prop:aggbcast}, after $D$ rounds the hub holds $B = \sum_{i\in V} b_i$ exactly, not an approximation, since every node's contribution is included by the uplink termination argument. Because $\mathcal{A}$'s decision at round $r$ depends only on $B$, the hub computes exactly the action a centralized instance of $\mathcal{A}$ would compute given the same per-agent contributions. By Proposition~\ref{prop:aggbcast} again, within a further $D$ rounds every agent holds the hub's decision and has derived its own depth $d_i$ from the hop count on this broadcast, so all agents can identify when the current cycle ends and begin the next round's contribution simultaneously, regardless of their depth in $\mathcal{T}$. Hence the sequence of aggregates and decisions seen across the whole run is identical, round for round, to what a centralized instance of $\mathcal{A}$ would see given the same sequence of per-agent contributions; the only difference is the $2D$ rounds of communication latency inserted between successive decisions.
 \end{proof}
 
-\merw runs in synchronous rounds. Every agent takes one action per discrete
+EigenTree runs in synchronous rounds. Every agent takes one action per discrete
 time step. A pull, a forwarded packet, any outcome of a step, becomes visible
 to its recipient only at the start of the next step.
 
-Algorithm~\ref{alg:merw-generic} gives \merw as a single generic protocol.
+Algorithm~\ref{alg:merw-generic} gives EigenTree as a single generic protocol.
 After initialization, agents repeat a fixed cycle of four phases: Pull,
 Uplink, Hub decision, Downlink. An application supplies $\textsc{Init}$,
 $\textsc{LocalPull}$, and $\textsc{HubDecide}$, which fix what each agent
@@ -346,7 +350,7 @@ gives the full cycle for regret minimization and best arm identification,
 detailed in the two subsections below.
 
 \begin{algorithm}[tb]
-\caption{\merw (generic protocol)}
+\caption{EigenTree (generic protocol)}
 \label{alg:merw-generic}
 \begin{algorithmic}[1]
 \STATE \textbf{Require:} graph $G$; hooks $\textsc{Init}$, $\textsc{LocalPull}$, $\textsc{HubDecide}$; a stopping condition on $t$ or on a hub-computed flag $\mathrm{done}$
@@ -366,13 +370,13 @@ detailed in the two subsections below.
 \end{algorithmic}
 \end{algorithm}
 
-\subsection{\merw vs. Minimum Diameter Tree}
+\subsection{EigenTree vs. Minimum Diameter Tree}
 \label{sec:mdst-gap}
 
-\merw sets its root at $h^\star$, the highest eigenvector centrality node.
+EigenTree sets its root at $h^\star$, the highest eigenvector centrality node.
 This is in general \emph{not} the graph's absolute center, i.e., the root that
 would minimize tree depth and give a minimum diameter spanning tree (MDST)
-\citep{hakimi1964,hassintamir1991}. Thus the tree depth $D =
+\citep{hakimi1964,hassintamir1995}. Thus the tree depth $D =
 \mathrm{ecc}_G(h^\star)$, which sets the $O(D)$ communication overhead of
 Theorem~\ref{thm:coordinator}, can exceed $D' = R(G)$, the depth an MDST would
 achieve. We bound this gap: first the worst case, on graphs far from the
@@ -383,31 +387,29 @@ to the end of a long path: $h^\star$ settles inside the cluster, since that is
 where eigenvector centrality concentrates, while the true center sits near the
 path's midpoint. As the path grows, $D$ approaches $2D'$, the extreme allowed by
 $D' \geq \mathrm{diam}(G)/2$, which holds for \emph{any} choice of root;
-\merw's hub does no better here than an arbitrary one. This
+EigenTree's hub does no better here than an arbitrary one. This
 graph is the opposite of an expander: the long path makes it easy to cut in
 two, so its $\lambda_2$ shrinks toward $0$ as the path grows, and it falls
 outside the regime of Definition~\ref{def:expander}. The rest of this section
 shows the gap is small inside that regime.
 
 \paragraph{The expander regime.} Inside the regime of
-Definition~\ref{def:expander} the gap is small, and this follows from known
-spectral bounds rather than any new argument. Mohar's diameter bound
-\citep{mohar1991} gives $\mathrm{diam}(G) \leq \lceil \frac{\lambda_\infty +
-\lambda_2}{4\lambda_2}\ln(N-1)\rceil \cdot 2$, and combined with the elementary
-$D \leq \mathrm{diam}(G)$ and $D' \geq \mathrm{diam}(G)/2$ this yields
-$D - D' \leq \lceil \frac{\lambda_\infty + \lambda_2}{4\lambda_2}\ln(N-1)\rceil$
-(supplementary). When $\lambda_2$ is bounded away from $0$ the coefficient is a
-constant, so $D - D' = O(\log N)$: \merw's tree is a logarithmic number of hops
-deeper than the true MDST, a constant-factor overhead since $D'$ is itself
-$\Omega(\log N)$ there. This asks nothing about individual degrees, so it covers
-sparse expanders too, and it degrades to the worst case exactly as
+Definition~\ref{def:expander} the gap is small, and this follows from the
+worst-case bound with no new argument. Combining the elementary
+$D \leq \mathrm{diam}(G)$ and $D' \geq \mathrm{diam}(G)/2$ gives
+$D - D' \leq \mathrm{diam}(G)/2$, and in the expander regime
+$\mathrm{diam}(G) = O(\log N)$ (bounded $\lambda_2$ forces logarithmic diameter
+\citep{mohar1991}), so $D - D' = O(\log N)$: EigenTree's tree is a logarithmic
+number of hops deeper than the true MDST, a constant-factor overhead since $D'$
+is itself $\Omega(\log N)$ there. This asks nothing about individual degrees, so
+it covers sparse expanders too, and it degrades to the worst case exactly as
 $\lambda_2 \to 0$. When the graph is dense enough that
 $\deg(h^\star) + \min_{u \notin \mathcal{N}_G(h^\star)} \deg(u) \geq N$, the gap
 tightens all the way to $D - D' \leq 1$ by a pigeonhole argument
 (supplementary), which holds with high probability on Erd\H{o}s--R\'{e}nyi
-graphs with $p$ above $1/2$ by a constant margin. \merw does not try to avoid
+graphs with $p$ above $1/2$ by a constant margin. EigenTree does not try to avoid
 the worst case directly, since doing so would need the same all-pairs distances
-that exact MDST construction depends on, which is the global knowledge \merw is
+that exact MDST construction depends on, which is the global knowledge EigenTree is
 built to avoid.
 
 The same $\lambda_2$ governs fault tolerance (Section~\ref{sec:ft}): inside the
@@ -421,7 +423,7 @@ With $K$ arms of unknown means $\mu_1 \geq \cdots \geq \mu_K$ and sub-Gaussian r
 
 \begin{corollary}[Regret matches centralized UCB]
 \label{cor:regret}
-Under the \merw relay protocol, the leading term of the expected group cumulative regret matches a centralized UCB agent on $P$ total pulls, with $P = \Theta(NT/(2D+1))$.
+Under the EigenTree relay protocol, the leading term of the expected group cumulative regret matches a centralized UCB agent on $P$ total pulls, with $P = \Theta(NT/(2D+1))$.
 \end{corollary}
 
 \subsection{Instantiation: Best Arm Identification}
@@ -429,7 +431,7 @@ Under the \merw relay protocol, the leading term of the expected group cumulativ
 
 In BAI, given confidence $\delta$, the goal is to identify $a^\star =
 \arg\max_k \mu_k$ with probability $\geq 1-\delta$ using as few total pulls as
-possible. \merw-BAI adapts \citet{hillel2013distributed}'s Algorithm 3 to the
+possible. EigenTree-BAI adapts \citet{hillel2013distributed}'s Algorithm 3 to the
 same generic protocol, run in elimination rounds $r = 1, 2, \ldots$ over a
 surviving arm set $S_r \subseteq \{1,\ldots,K\}$, initialized to
 $S_0 = \{1,\ldots,K\}$ and only shrinking. In round $r$, every agent $i$
@@ -446,12 +448,12 @@ $S_r = \{k \in S_{r-1} : \bar\mu_k \geq \max_{k'} \bar\mu_{k'} - \epsilon_r\}$,
 and broadcasts $S_r$ on the downlink instead of a running statistic like
 $(\hat n, \hat s, P)$. The hub, not any other node, determines when to stop,
 once $|S_r|=1$, and this outcome is broadcast on the downlink like any other
-decision. Consequently \merw-BAI's round length $L_r + 2D$ shrinks across
-elimination rounds as $\epsilon_r$ tightens, unlike \merw-UCB's fixed $2D+1$.
+decision. Consequently EigenTree-BAI's round length $L_r + 2D$ shrinks across
+elimination rounds as $\epsilon_r$ tightens, unlike EigenTree-UCB's fixed $2D+1$.
 
 \begin{corollary}[BAI sample complexity matches centralized BAI]
 \label{cor:bai}
-The total number of arm pulls required by \merw-BAI to identify $a^\star$ with
+The total number of arm pulls required by EigenTree-BAI to identify $a^\star$ with
 probability $\geq 1-\delta$ matches the centralized algorithm of
 \citet{hillel2013distributed}; the only overhead is $2D$ extra time steps per
 elimination round.
@@ -468,7 +470,7 @@ elimination round.
 & \textbf{Function} & \textbf{Description / Behavior} \\
 \midrule
 % --- FIRST INSTANTIATION ---
-\textbf{\merw-UCB} & \textsc{Init} 			& pull each $k\in\{1,..,K\}$ once, $K$ rounds \\
+\textbf{EigenTree-UCB} & \textsc{Init} 			& pull each $k\in\{1,..,K\}$ once, $K$ rounds \\
 			       & \textsc{Local-Pull}    & UCB-maximizing arm, 1 round \\
                    & \textsc{Uplink}        & per-arm pull counts and reward sums since last cycle, $(n_i,s_i)$ \\
                    & \textsc{Hub-Decide}    & UCB-pull on $B$; never stops early \\
@@ -476,7 +478,7 @@ elimination round.
                    & \textsc{Uplink}      	& \\
 \midrule
 % --- SECOND INSTANTIATION ---
-\textbf{\merw-BAI} & \textsc{Init}       & $\sigma_i \leftarrow S_0$, 0 rounds \\
+\textbf{EigenTree-BAI} & \textsc{Init}       & $\sigma_i \leftarrow S_0$, 0 rounds \\
 			       & \textsc{Local-Pull} & every $k\in S_{r-1}$, $L_r$ times \\
                    & \textsc{Uplink}     & per-arm reward sums over $S_{r-1}$ this round, $b_i$ \\
                    & \textsc{Hub-Decide} & eliminate below $\epsilon_r$; stop when $|S_r|{=}1$ \\
@@ -492,15 +494,15 @@ elimination round.
 
 Centralization is exactly what cooperative learning moved away from, and one of
 the reasons is fragility: a central coordinator is a single point of failure. By
-reconstructing a coordinator, \merw reintroduces this weakness. If the hub
+reconstructing a coordinator, EigenTree reintroduces this weakness. If the hub
 fails, the system fails with it, since every agent's information passes through
 that single point, and more generally the failure of any non-leaf node can break
-the routing tree $\mathcal{T}$, and thus the protocol. We
-describe a fault-tolerant variant, \merwft, that mitigates the effect of node
-deletion in the expander regime of Definition~\ref{def:expander}. Under
-\merwft, any single node $v\in G$ can fail, and
-the surviving nodes can efficiently recompute the eigenvector centrality and
-thus rebuild a new routing tree that spans the surviving graph $G\setminus \{v\}$.
+the routing tree $\mathcal{T}$, and thus the protocol. We show that EigenTree is
+nonetheless fault-tolerant by construction, in the expander regime of
+Definition~\ref{def:expander}: any single node $v\in G$ can fail, and the
+surviving nodes recompute the eigenvector centrality and rebuild a routing tree
+spanning $G\setminus\{v\}$ using the same election that ran at initialization,
+with no separate recovery machinery.
 
 \subsection{Node Removal as a Perturbation}
 \label{sec:perturbation}
@@ -598,7 +600,7 @@ start.
 \iffalse
 \subsection{Recovery}
 
-So far we assumed a failed node stays down. The general version of \merwft
+So far we assumed a failed node stays down. The general version of EigenTree
 also handles a node coming back. A recovering node $v$ has no reliable
 state: it may have missed any number of promotions and re-routings while it
 was down. So it does not try to recover its old position in $\mathcal{T}$;
@@ -624,7 +626,7 @@ not any particular identity for $j$.
 \section{Experiments}
 \label{sec:experiments}
 
-We evaluate both instantiations of \merw on Erd\H{o}s--R\'{e}nyi (ER) graphs.
+We evaluate both instantiations of EigenTree on Erd\H{o}s--R\'{e}nyi (ER) graphs.
 Here eigenvector centrality is spread across several nodes, but it still
 identifies a clear hub.
 
@@ -651,18 +653,18 @@ hub for both.
     \label{fig:bai_er}
 \end{figure}
 
-To test the failover mechanism of Section~\ref{sec:ft} directly, we run
-\merwft on an ER graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) and kill the hub
-at $t=500,1000,1500$. Each time, the survivors re-elect a new hub and the
-network recovers. Figure~\ref{fig:ft_regret} shows the resulting group regret:
-every failure is followed by a recovery within a handful of rounds, and the
-regret curve afterward grows at the same rate as before the failure, with
-no lasting penalty.
+To test the re-election of Section~\ref{sec:ft} directly, we run EigenTree-UCB on
+an ER graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) and kill the hub at
+$t=500,1000,1500$. Each time, the survivors re-elect a new hub and the network
+recovers. Figure~\ref{fig:ft_regret} shows the resulting group regret: every
+failure is followed by a recovery within a handful of rounds, and the regret
+curve afterward grows at the same rate as before the failure, with no lasting
+penalty.
 
 \begin{figure}
     \centering
     \includegraphics[width=\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T2000_at500-1000-1500.pdf}
-    \caption{Group regret for \merwft on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) with the hub killed at $t=500,1000,1500$. Dashed lines mark failures, dotted lines mark recovery. All three failures are recovered from.}
+    \caption{Group regret for EigenTree-UCB on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) with the hub killed at $t=500,1000,1500$. After each failure the survivors re-elect a hub and the regret resumes at its pre-failure rate.}
     \label{fig:ft_regret}
 \end{figure}
 
@@ -674,36 +676,32 @@ on dense or well-expanding graphs. A complete relation that also covers
 sparser graphs and other random graph models is left for future work.
 
 The graph must be connected and undirected, and stays that way except for
-the node failures \merwft handles. $D$ can be large on sparse or path-like
+the node failures EigenTree handles. $D$ can be large on sparse or path-like
 graphs; this is exactly the regime Section~\ref{sec:mdst-gap} identifies.
 BAI needs $N$ inside the elimination schedule of \citet{hillel2013distributed}
 itself, before the very first round; regret minimization only needs $N$ to set
 $\tau_{\mathrm{init}}$ and the gossip-round count during setup, never again
-afterward. \merwft only covers fail-stop failures: a node works
-correctly, goes silent, or comes back and rejoins through the recovery
-mechanism of Section~\ref{sec:ft}. It has no mechanism for a node that stays
-active but sends incorrect messages, and none for two nodes failing within the
-same re-election. Both are left for future work.
+afterward. When a node goes silent, the survivors re-elect a coordinator and
+rebuild the tree over the remaining graph (Section~\ref{sec:ft}).
 
 \section{Conclusion}
 \label{sec:conclusion}
 
 A coordinator can emerge from purely local computation: no node ever needs
 to see the graph's global structure, or even know how many other agents
-there are. \merw builds this coordinator from eigenvector centrality alone,
+there are. EigenTree builds this coordinator from eigenvector centrality alone,
 using only local gossip and a short flooding phase, and the resulting hub
 is statistically sufficient for any decision rule that depends only on
 globally aggregated statistics. We instantiated this twice, for regret
 minimization and for best arm identification, and both match centralized
 performance up to a bounded, $O(D)$ communication overhead per round.
 
-Any single node, hub or not, can still fail. \merwft handles this: it
-removes the failure points a tree creates at zero or near-zero steady-state
-cost, and it brings a returning node back into the tree without disrupting
-anything else. What is left, as Section~\ref{sec:discussion} lays out, is
-mostly about tightening guarantees already in place: a general bound
-relating $D$ to the true minimum diameter, and a fault model that goes
-beyond fail-stop failures.
+Any single node, hub or not, can still fail. EigenTree handles this within the
+same protocol: it removes the failure points a tree creates at zero or
+near-zero steady-state cost, re-electing a coordinator from the survivors. What
+is left, as Section~\ref{sec:discussion} lays out, is mostly about tightening
+guarantees already in place, such as a general bound relating $D$ to the true
+minimum diameter.
 
 \bibliography{references}
 

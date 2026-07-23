@@ -1053,9 +1053,9 @@ def _run_parallel(tasks, algo_names, n_workers, tag=""):
 ALGO_NAMES = ["Central-UCB", "Coop-UCB2", EIGENTREE_UCB_NAME]
 
 STYLES = {
-    "Central-UCB":      ("C0", ":",  "Central-UCB"),
-    "Coop-UCB2":        ("C1", "--", "Coop-UCB2"),
-    EIGENTREE_UCB_NAME: ("C2", "-",  EIGENTREE_UCB_NAME),
+    "Central-UCB":      ("C3", "-",  "Central-UCB"),
+    "Coop-UCB2":        ("C0", "-",  "Coop-UCB2"),
+    EIGENTREE_UCB_NAME: ("C2", "-",  "EigenTree-UCB"),
 }
 
 
