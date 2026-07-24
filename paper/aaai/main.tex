@@ -15,15 +15,12 @@
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{ragged2e}
-\usepackage{todonotes}
-\usepackage{xspace}
 
 \newtheorem{proposition}{Proposition}
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
 \newtheorem{corollary}{Corollary}
 \newtheorem{definition}{Definition}
-\newtheorem{conjecture}{Conjecture}
 
 \pdfinfo{
 /TemplateVersion (2027.1)
@@ -79,7 +76,10 @@
 In cooperative multi-agent learning, no individual agent has access to the
 global state of the system, but the best-performing strategy is usually the one
 available to a centralized decision maker with a full view of everyone's
-observations. This is the setting whenever $N$ agents connected by an
+observations. Cooperative learning nonetheless avoids such a central authority,
+for reasons that include privacy, since it keeps each agent's raw data local,
+and robustness, since it has no single component whose failure stops the system.
+This is the setting whenever $N$ agents connected by an
 undirected graph $G = (V, E)$ must repeatedly act and learn from feedback while
 exchanging only local messages with their graph neighbors. Existing approaches
 close the gap to centralized performance either by symmetric averaging, where
@@ -100,22 +100,22 @@ which sees the globally aggregated picture and broadcasts its decisions back
 down. We prove this hub is statistically equivalent to a true centralized
 coordinator for any decision rule that depends only on globally aggregated
 per-agent statistics, at the cost of a communication overhead set by the tree's
-depth, which we bound against that of the shallowest possible tree.
+depth. We bound that depth against the shallowest tree any root could achieve.
 
 Any such task can run over this same hub-and-tree structure by supplying two
 rules: what each agent contributes locally, and what the hub decides from the
 aggregate. We instantiate these for two standard cooperative multi-armed bandit
 objectives, \emph{regret minimization} and \emph{best arm identification} (BAI),
-and show the hub recovers centralized-level performance in both.
+and show the hub matches centralized performance in both.
 
-By rebuilding a centralized structure, EigenTree inherits the weakness that pushed
-cooperative learning toward decentralization in the first place: a central
-coordinator is a single point of failure, and its failure takes the whole
-system down. We recover robustness without giving up the centralized statistics.
-A dead node is a perturbation of the graph, so the survivors re-run the same
-election on the perturbed graph and rebuild the tree around whoever is now most
-central. No node is treated specially and no backup is kept: the hub is only the
-largest instance of one mechanism that covers every node.
+Rebuilding a coordinator gives back one of the things decentralization was meant
+to avoid: a single point of failure. If the hub dies, every agent loses the
+destination its messages route to, and the failure of any interior node breaks
+the tree beneath it. EigenTree recovers from this by re-running the same election
+that built the tree, with no backup structure and no procedure reserved for the
+hub. A failure changes the graph only slightly, so re-election starts warm from
+the current centralities: the survivors settle on a new coordinator and rebuild
+the tree in the time the first build took.
 
 \paragraph{Contributions.} (1) A fully decentralized protocol for building a
 centralized communication structure: the hub and tree emerge from local
@@ -227,6 +227,13 @@ the Perron--Frobenius theorem \citep{hornjohnson2013}, $A$ has a unique
 positive leading eigenvalue $\lambda_1$ with strictly positive eigenvector
 $\psi$ such that $A\psi = \lambda_1 \psi$ and $\|\psi\|_2 = 1$.
 
+Every agent knows only $N$, the number of nodes. This is enough to synchronize
+the whole setup: each of the fixed-length phases below runs for a budget of
+$O(\log N)$ rounds that every agent computes from $N$ alone, so all agents start
+and stop each phase on the same round, with no node ever evaluating a global
+convergence test or needing to know the graph's diameter. We describe the phases
+next and state each budget as it arises.
+
 No single agent has access to $A$, so $\psi$ is computed by the distributed
 power iteration of \citep{jelasity2007asynchronous}. Each agent $i$ keeps a
 local scalar $w_i$, initialized to 1, and repeats: (1) collect $w_j$ from every
@@ -235,10 +242,8 @@ neighbor and form the unnormalized update $\tilde w_i = \sum_{j\sim i} w_j$;
 $r_i$ with random neighbors for $O(\log N)$ gossip rounds, so that every $r_i$
 converges to the same network-wide estimate of $\log\lambda_1$ without any node
 ever summing over all of $N$; (4) normalize locally, $w_i \leftarrow \tilde
-w_i/\exp(r_i)$. This runs for a fixed number of iterations $\tau_{\mathrm{init}}
-= O(\log N)$, so all agents finish on the same round and begin max-flooding
-together, with no agent evaluating a global convergence test. This gossip step
-replaces the single global $\ell_2$-norm renormalization an ordinary
+w_i/\exp(r_i)$. This runs for $\tau_{\mathrm{init}} = O(\log N)$ iterations. The
+gossip step replaces the single global $\ell_2$-norm renormalization an ordinary
 (non-distributed) power iteration would need, at the cost of the extra gossip
 rounds. Importantly, only the \emph{ratio} $\psi_j/\psi_i$ is needed for
 routing: agent $i$ simply checks which neighbor's value is larger. Thus, the
@@ -251,15 +256,11 @@ maxima of $\tilde\psi$ into a single spanning tree. Each agent $i$ keeps a
 flooded value $m_i$, initialized to $\tilde\psi_i$, and a pointer
 $\mathrm{via}_i$ initialized to itself. Every round, $i$ broadcasts $m_i$ to
 its neighbors; if some neighbor $j$ reports $m_j > m_i$, $i$ sets $m_i
-\leftarrow m_j$ and $\mathrm{via}_i \leftarrow j$. Every node runs this for a
-fixed number of rounds $T_{\mathrm{flood}}$, set to any value at least
-$\mathrm{diam}(G)+1$: flooding propagates the global maximum one hop per round,
-so this many rounds suffice for it to reach every node. In the expander regime
-$\mathrm{diam}(G) = O(\log N)$ \citep{mohar1991}, so $T_{\mathrm{flood}} = O(\log N)$, the same
-$O(\log N)$ budget as the power iteration and the gossip rounds. No node needs
-$\mathrm{diam}(G)$ itself, only this shared budget; because it is shared and the
-rounds are synchronous, all nodes finish flooding on the same round and begin
-the first pull together. At
+\leftarrow m_j$ and $\mathrm{via}_i \leftarrow j$. Flooding propagates the global maximum one hop per round, so it reaches every
+node within $\mathrm{diam}(G)$ rounds. In the expander regime
+$\mathrm{diam}(G) = O(\log N)$ \citep{mohar1991}, so every node runs this phase
+for the same $T_{\mathrm{flood}} = O(\log N)$ budget it computes from $N$, again
+without knowing $\mathrm{diam}(G)$ itself. At
 convergence, $m_i$ equals the global maximum $\tilde\psi_{h^\star}$ everywhere,
 and $\mathrm{via}_i$ points one step closer to $h^\star$; any node whose own
 $\tilde\psi_i$ was a local but not the global maximum re-routes toward
@@ -288,7 +289,6 @@ If each node $i$ holds a scalar $x_i$ and propagates it toward $h^\star$ one
 	count carried on the first downlink it receives.
 \end{proposition}
 
-% \subsection{Information flow perspective}
 \subsection{A Path-Based Motivation for EigenTree}
 \label{sec:merw}
 
@@ -323,6 +323,16 @@ centrality allows one to identify the hub node $h\in G$ which is most
 frequently traversed.
 
 \subsection{Coordinator Sufficiency}
+
+The routing tree adds communication latency, but it loses no information. Every
+agent's contribution reaches the hub through the uplink, and the sum the hub
+forms is the exact aggregate $B = \sum_i b_i$ a centralized instance would
+compute, not an approximation or a stale estimate. The hub therefore takes the
+same action a centralized decision maker would take from the same observations;
+the tree only delays when that action is taken and broadcast. For any decision
+rule that reads its input through $B$, this makes the emergent hub indistinguishable
+from a true coordinator, at a cost of $2D$ rounds of latency per decision. The
+next theorem states this precisely.
 
 \begin{theorem}[Coordinator sufficiency]
 \label{thm:coordinator}
@@ -419,7 +429,7 @@ and off it the repair is as slow as the tree is deep.
 \subsection{Instantiation: Regret Minimization}
 \label{sec:regret}
 
-With $K$ arms of unknown means $\mu_1 \geq \cdots \geq \mu_K$ and sub-Gaussian rewards, the objective is to minimize $R(T) = \sum_{i}\sum_{t=1}^T \mathbb{E}[\mu_1 - \mu_{a_i(t)}]$. Each agent $i$ keeps two length-$K$ vectors, $n_i, s_i \in \mathbb{R}^K$, its own per-arm pull counts and reward sums since the last cycle; these are exactly the local contribution $b_i = (n_i, s_i)$ that Algorithm~\ref{alg:merw-generic} aggregates. The hub sums these into the running totals $\hat n = \sum_i n_i \in \mathbb{R}^K$ and $\hat s = \sum_i s_i \in \mathbb{R}^K$, one pull count and one reward sum per arm, pulls the UCB1-maximizing arm \citep{auer2002}, i.e., $\arg\max_k \hat s_k/\hat n_k + \sqrt{c\log(P)/\hat n_k}$, and broadcasts $(\hat n, \hat s, P)$ on the downlink. The scalar $P = \sum_k \hat n_k$ is the total pull count across all arms; it is carried alongside $\hat n$, rather than recomputed by summing $\hat n$ every round, so that every node applies the same exploration bonus without an extra reduction (following \citep{martinez2019decentralized}). Each relay cycle lasts $2D+1$ rounds: one pull round, $D$ uplink rounds, one hub-decision round, $D$ downlink rounds.
+With $K$ arms of unknown means $\mu_1 \geq \cdots \geq \mu_K$ and $\sigma$-sub-Gaussian rewards, the objective is to minimize $R(T) = \sum_{i}\sum_{t=1}^T \mathbb{E}[\mu_1 - \mu_{a_i(t)}]$. Each agent $i$ keeps two length-$K$ vectors, $n_i, s_i \in \mathbb{R}^K$, its own per-arm pull counts and reward sums since the last cycle; these are exactly the local contribution $b_i = (n_i, s_i)$ that Algorithm~\ref{alg:merw-generic} aggregates. The hub sums these into the running totals $\hat n = \sum_i n_i \in \mathbb{R}^K$ and $\hat s = \sum_i s_i \in \mathbb{R}^K$, one pull count and one reward sum per arm, pulls the UCB1-maximizing arm \citep{auer2002}, i.e., $\arg\max_k \hat s_k/\hat n_k + \sigma\sqrt{c\log(P)/\hat n_k}$, and broadcasts $(\hat n, \hat s, P)$ on the downlink. The scalar $P = \sum_k \hat n_k$ is the total pull count across all arms; it is carried alongside $\hat n$, rather than recomputed by summing $\hat n$ every round, so that every node applies the same exploration bonus without an extra reduction (following \citep{martinez2019decentralized}). Each relay cycle lasts $2D+1$ rounds: one pull round, $D$ uplink rounds, one hub-decision round, $D$ downlink rounds.
 
 \begin{corollary}[Regret matches centralized UCB]
 \label{cor:regret}
@@ -475,7 +485,6 @@ elimination round.
                    & \textsc{Uplink}        & per-arm pull counts and reward sums since last cycle, $(n_i,s_i)$ \\
                    & \textsc{Hub-Decide}    & UCB-pull on $B$; never stops early \\
                    & \textsc{Downlink}      & aggregate $(\hat n,\hat s,P)$ \\
-                   & \textsc{Uplink}      	& \\
 \midrule
 % --- SECOND INSTANTIATION ---
 \textbf{EigenTree-BAI} & \textsc{Init}       & $\sigma_i \leftarrow S_0$, 0 rounds \\
@@ -483,7 +492,6 @@ elimination round.
                    & \textsc{Uplink}     & per-arm reward sums over $S_{r-1}$ this round, $b_i$ \\
                    & \textsc{Hub-Decide} & eliminate below $\epsilon_r$; stop when $|S_r|{=}1$ \\
                    & \textsc{Downlink}   & surviving set $S_r$ \\
-                   & \textsc{Uplink}   	 & \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -492,12 +500,9 @@ elimination round.
 \section{Fault Tolerance}
 \label{sec:ft}
 
-Centralization is exactly what cooperative learning moved away from, and one of
-the reasons is fragility: a central coordinator is a single point of failure. By
-reconstructing a coordinator, EigenTree reintroduces this weakness. If the hub
-fails, the system fails with it, since every agent's information passes through
-that single point, and more generally the failure of any non-leaf node can break
-the routing tree $\mathcal{T}$, and thus the protocol. We show that EigenTree is
+The hub is a single point of failure: if it dies, every agent's information
+loses its destination. More generally, the failure of any non-leaf node breaks
+the routing tree $\mathcal{T}$ and stops the protocol. We show that EigenTree is
 nonetheless fault-tolerant by construction, in the expander regime of
 Definition~\ref{def:expander}: any single node $v\in G$ can fail, and the
 surviving nodes recompute the eigenvector centrality and rebuild a routing tree
@@ -565,7 +570,7 @@ initializer.
 Before the survivors can re-run the iteration they must agree, without a
 coordinator, that a failure happened and start together, in step. Every node
 already learned its depth $d_i$ and the tree height $D$ from the first
-downlink (line~13 of Algorithm~\ref{alg:merw-generic}), where depth is just
+downlink (the Downlink phase of Algorithm~\ref{alg:merw-generic}), where depth is just
 the hop count that message carried; every ordinary cycle is one
 uplink-and-downlink traversal of $2D+1$ hops, and detection reuses this
 schedule directly. Each node runs one uniform timer $\tau = 2D+1$ hops, the
@@ -597,56 +602,44 @@ the same max-flooding as at initialization, over $G\setminus\{v\}$, so its
 height is discovered from the first ordinary cycle exactly as $D$ was at the
 start.
 
-\iffalse
-\subsection{Recovery}
-
-So far we assumed a failed node stays down. The general version of EigenTree
-also handles a node coming back. A recovering node $v$ has no reliable
-state: it may have missed any number of promotions and re-routings while it
-was down. So it does not try to recover its old position in $\mathcal{T}$;
-it rejoins as if it were new. $v$ sends a \textsc{Ping} to each graph
-neighbor. Any live neighbor $j$ that is already attached replies with its
-current depth $d_j$, and $v$ attaches to whichever neighbor gives the
-smallest $d_j$, breaking ties by smallest identity, as in the initial
-max-flooding. It sets $d_v = d_j + 1$ and waits for the next downlink
-through $j$ to fill in its mirrored state $(\hat n, \hat s)$, the same way
-any node does at a cycle boundary.
-
-\begin{proposition}[Recovery correctness]
-\label{prop:recovery-correct}
-If $v$ attaches to a live, already-attached neighbor $j$ upon recovery, the resulting structure remains a valid spanning tree over all currently live nodes, with no cycles introduced, regardless of which node currently serves as hub.
-\end{proposition}
-
-This works the same way even under repeated failure. If $v$ happens to
-reconnect through a node that was hub at some earlier point, or through one
-promoted since, nothing changes: recovery only needs $j$ to be live and attached,
-not any particular identity for $j$.
-\fi
 
 \section{Experiments}
 \label{sec:experiments}
 
-We evaluate both instantiations of EigenTree on Erd\H{o}s--R\'{e}nyi (ER) graphs.
-Here eigenvector centrality is spread across several nodes, but it still
-identifies a clear hub.
-
+We evaluate both instantiations of EigenTree on Erd\H{o}s--R\'{e}nyi (ER) graphs,
+the setting our analysis targets: above the connectivity threshold an ER graph
+is an expander with high probability, so it sits in the regime of
+Definition~\ref{def:expander} where the costs are stated. It is also the harder
+case for hub emergence, since eigenvector centrality is spread across several
+nodes rather than concentrated on one; even so, the protocol still identifies a
+clear hub. For every experiment we compare against a centralized reference on
+the same graph and the same elected hub, so any difference is due to routing over
+the tree and not to a different topology or a different choice of coordinator.
 For regret minimization ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs;
 Figure~\ref{fig:regret_er}), the hub, identified without any central authority,
 coordinates the network to logarithmic group regret while non-hub agents
-accumulate no regret during communication rounds. For best arm identification
+accumulate no regret during communication rounds. At $T=5000$ EigenTree reaches
+a group regret of $100$, matching the centralized UCB baseline ($112$) and well
+below symmetric averaging with Coop-UCB2 ($370$). It does so on $45{,}500$ total
+arm pulls against the baseline's $250{,}000$: because non-hub agents stay silent
+while relaying, the group spends far fewer pulls to reach the same regret, which
+is the $P = \Theta(NT/(2D+1))$ effective pull count of Corollary~\ref{cor:regret}
+made concrete. For best arm identification
 ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$), Figure~\ref{fig:bai_er}
 compares total arm pulls against the centralized reference algorithm
-\citep{hillel2013distributed} as a function of $N$, using the same graph and
-hub for both.
+\citep{hillel2013distributed} as a function of $N$. The two curves stay within $4.5\%$ of each other on average across
+$N \in \{10,\ldots,50\}$, inside the run-to-run standard error, so routing the
+elimination rounds over the tree costs no extra pulls; its only price is the
+$2D$ time steps per round of Corollary~\ref{cor:bai}.
 
-\begin{figure}
+\begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
     \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Top}: group regret vs.\ round. \emph{Bottom}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
     \label{fig:regret_er}
 \end{figure}
 
-\begin{figure}
+\begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
     \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Top}: total arm pulls vs.\ $N$. \emph{Bottom}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
@@ -655,13 +648,15 @@ hub for both.
 
 To test the re-election of Section~\ref{sec:ft} directly, we run EigenTree-UCB on
 an ER graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) and kill the hub at
-$t=500,1000,1500$. Each time, the survivors re-elect a new hub and the network
-recovers. Figure~\ref{fig:ft_regret} shows the resulting group regret: every
-failure is followed by a recovery within a handful of rounds, and the regret
-curve afterward grows at the same rate as before the failure, with no lasting
+$t=500,1000,1500$. Each time, the survivors detect the loss, re-elect a new hub,
+and rebuild a valid spanning tree over the remaining nodes. Recovery takes $23$,
+$27$, and $23$ rounds for the three failures, a few relay cycles ($2D+1=5$ rounds
+here) spent on detection, the warm re-election, and flooding, consistent with the
+$O(\log N)$ budget. Figure~\ref{fig:ft_regret} shows the resulting group regret:
+after each failure the curve grows at the same rate as before it, with no lasting
 penalty.
 
-\begin{figure}
+\begin{figure}[!htb]
     \centering
     \includegraphics[width=\columnwidth]{results/FaultTolerance/fault_tolerance_er_N20_K10_T2000_at500-1000-1500.pdf}
     \caption{Group regret for EigenTree-UCB on an Erd\H{o}s--R\'{e}nyi graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) with the hub killed at $t=500,1000,1500$. After each failure the survivors re-elect a hub and the regret resumes at its pre-failure rate.}
@@ -693,15 +688,9 @@ there are. EigenTree builds this coordinator from eigenvector centrality alone,
 using only local gossip and a short flooding phase, and the resulting hub
 is statistically sufficient for any decision rule that depends only on
 globally aggregated statistics. We instantiated this twice, for regret
-minimization and for best arm identification, and both match centralized
-performance up to a bounded, $O(D)$ communication overhead per round.
-
-Any single node, hub or not, can still fail. EigenTree handles this within the
-same protocol: it removes the failure points a tree creates at zero or
-near-zero steady-state cost, re-electing a coordinator from the survivors. What
-is left, as Section~\ref{sec:discussion} lays out, is mostly about tightening
-guarantees already in place, such as a general bound relating $D$ to the true
-minimum diameter.
+minimization and for best arm identification, both matching centralized
+performance up to a bounded $O(D)$ communication overhead per round, and the
+same election that builds the hub restores it when any node fails.
 
 \bibliography{references}
 

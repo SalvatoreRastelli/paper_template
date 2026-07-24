@@ -1114,6 +1114,18 @@ def plot_bai(results, graph_type, K, n_runs, delta=0.05):
             lbl.set_rotation(45)
 
     fig.tight_layout(rect=[0, 0.08, 1, 1])
+
+    # Move the y-axis 1e4 offset from the top of each plot to the left edge,
+    # above the tick labels rather than floating over the curve. The offset
+    # string is only populated after a draw.
+    fig.canvas.draw()
+    for ax in axes:
+        offset = ax.yaxis.get_offset_text()
+        exp = offset.get_text()
+        offset.set_visible(False)
+        if exp:
+            ax.text(-0.01, 1.0, exp, transform=ax.transAxes,
+                    ha="right", va="bottom", fontsize=8)
     fig.legend(handles, labels, loc="lower center", ncol=len(labels),
                bbox_to_anchor=(0.5, 0.0))
     out = BAI_DIR / f"merw_ucb_bai_{graph_type}_K{K}.pdf"
