@@ -411,20 +411,29 @@ best arm identification, detailed in the two subsections below.
 EigenTree sets its root at $h^\star$, the highest eigenvector centrality node.
 This is in general \emph{not} the graph's absolute center, i.e., the root that
 would minimize tree depth and give a minimum diameter spanning tree (MDST)
-\citep{hakimi1964,hassintamir1995}. Thus the tree depth $D =
-\mathrm{ecc}_G(h^\star)$, which sets the $O(D)$ communication overhead of
-Theorem~\ref{thm:coordinator}, can exceed $D' = R(G)$, the depth an MDST would
-achieve. We bound this gap in the expander regime of Definition~\ref{def:expander}.
-Combining the elementary $D \leq \mathrm{diam}(G)$ and $D' \geq
-\mathrm{diam}(G)/2$ gives $D - D' \leq \mathrm{diam}(G)/2$, and in the expander
-regime $\mathrm{diam}(G) = O(\log N)$ (bounded $\lambda_2$ forces logarithmic
-diameter \citep{mohar1991}), so $D - D' = O(\log N)$: EigenTree's tree is a
-logarithmic number of hops deeper than the true MDST, a constant-factor
-overhead since $D'$ is itself $\Omega(\log N)$ there. When the graph is dense enough that
-$\deg(h^\star) + \min_{u \notin \mathcal{N}_G(h^\star)} \deg(u) \geq N$, the
-gap tightens all the way to $D - D' \leq 1$ by a pigeonhole argument
-(supplementary), which holds with high probability on Erd\H{o}s--R\'{e}nyi
-graphs with $p$ above $1/2$ by a constant margin.
+\citep{hakimi1964,hassintamir1995}. Thus the tree depth $D$, which sets the
+$O(D)$ communication overhead of Theorem~\ref{thm:coordinator}, can exceed
+$D' = R(G)$, the depth an MDST would achieve. The expander regime of
+Definition~\ref{def:expander} holds both dense and sparse graphs, and the gap
+is small in each for a different reason.
+
+On dense graphs the hub covers the network in two hops. When $\deg(h^\star) +
+\min_{u \notin \mathcal{N}_G(h^\star)\cup\{h^\star\}} \deg(u) \geq N$, any node
+not adjacent to $h^\star$ must share a neighbor with it by a pigeonhole
+argument (supplementary), so $D \leq 2$ and, since $D' \geq 1$ on any graph
+that is not complete, $D - D' \leq 1$. This condition holds with high
+probability on Erd\H{o}s--R\'{e}nyi graphs with $p$ above $1/2$ by a constant
+margin, the setting of our experiments.
+
+Sparse expanders, random regular graphs or Erd\H{o}s--R\'{e}nyi just above the
+connectivity threshold, have bounded degree, so no node reaches the whole graph
+in two hops and the pigeonhole argument does not apply. There the MDST is
+itself deep: bounded $\lambda_2$ forces $\mathrm{diam}(G) = O(\log N)$
+\citep{mohar1991}, while $D' \geq \mathrm{diam}(G)/2$ on any graph, so $D' =
+\Theta(\log N)$: on these graphs even the optimal root gives a logarithmically
+deep tree. The regime where the choice of root is expensive is the one
+Definition~\ref{def:expander} excludes, path-like graphs with a vanishing
+spectral gap, where the diameter is $\Theta(N)$.
 
 \subsection{Instantiation: Regret Minimization}
 \label{sec:regret}
@@ -639,15 +648,16 @@ coordinator. For regret minimization ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50
 runs; Figure~\ref{fig:regret_er}), the hub, identified without any central
 authority, coordinates the network to logarithmic group regret while non-hub
 agents accumulate no regret during communication rounds. At $T=5000$ EigenTree
-reaches a group regret of $100$, matching the centralized UCB baseline ($112$)
-and well below symmetric averaging with Coop-UCB2 ($370$). It does so on
-$45{,}500$ total arm pulls against the baseline's $250{,}000$: because non-hub
+reaches a group regret of $101$, matching the centralized UCB baseline ($123$)
+and well below symmetric averaging with Coop-UCB2 ($366$). It does so on
+$71{,}500$ total arm pulls against the baseline's $250{,}000$: because non-hub
 agents stay silent while relaying, the group spends far fewer pulls to reach
 the same regret, which is the $P = \Theta(NT/(2D+1))$ effective pull count of
-Corollary~\ref{cor:regret}. For best arm identification ($K=10$, $\delta=0.05$,
+Corollary~\ref{cor:regret} (here $D=3$, so $NT/(2D+1)\approx71{,}400$). For
+best arm identification ($K=10$, $\delta=0.05$,
 $p=0.5$, 50 runs per $N$), Figure~\ref{fig:bai_er} compares total arm pulls
 against the centralized reference algorithm \citep{hillel2013distributed} as a
-function of $N$. The two curves stay within $4.5\%$ of each other on average
+function of $N$. The two curves stay within $4.7\%$ of each other on average
 across $N \in \{10,\ldots,50\}$, inside the run-to-run standard error, so
 routing the elimination rounds over the tree costs no extra pulls; its only
 price is the $2D+1$ time steps per round of Corollary~\ref{cor:bai}.
@@ -670,9 +680,14 @@ To test the re-election of Section~\ref{sec:ft} directly, we run EigenTree-UCB o
 an ER graph ($N=20$, $p=0.5$, $K=10$, $T=2000$) and kill the hub at
 $t=500,1000,1500$. Each time, the survivors detect the loss, re-elect a new hub,
 and rebuild a valid spanning tree over the remaining nodes. Recovery takes $23$,
-$27$, and $23$ rounds for the three failures, a few relay cycles ($2D+1=5$ rounds
-here) spent on detection, the warm re-election, and flooding, consistent with the
-$O(\log N)$ budget. Figure~\ref{fig:ft_regret} shows the resulting group regret:
+$27$, and $23$ rounds for the three failures. The re-election itself is a fixed
+$\tau_{\mathrm{init}}=6$ rounds in all three cases; the variation comes from the
+tree height, which changes as the hub moves ($D=2,4,2$ before the three
+failures). Detection costs $2D+1$ rounds, the failure notice a further $2D$, and
+the max-flood rebuild $2D_{\mathrm{new}}$ with $D_{\mathrm{new}}$ the height of
+the rebuilt tree, so recovery scales with the tree height while the spectral
+budget stays at $O(\log N)$.
+Figure~\ref{fig:ft_regret} shows the resulting group regret:
 after each failure the curve grows at the same rate as before it, with no lasting
 penalty.
 
@@ -686,9 +701,10 @@ penalty.
 \section{Discussion}
 \label{sec:discussion}
 
-Section~\ref{sec:mdst-gap} shows that the gap between $D$ and $D'$ is small
-on dense or well-expanding graphs. A complete relation that also covers
-sparser graphs and other random graph models is left for future work.
+Section~\ref{sec:mdst-gap} bounds the gap between $D$ and $D'$ on dense
+graphs, where it is at most one hop, and shows that on sparse expanders the
+MDST is itself logarithmically deep. A bound on $D$ that covers sparse
+expanders directly, and other random graph models, is left for future work.
 
 The graph must be connected and undirected, and stays that way except for
 the node failures EigenTree handles. $D$ can be large on sparse or path-like

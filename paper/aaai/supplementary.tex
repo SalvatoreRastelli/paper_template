@@ -218,36 +218,6 @@ contradict $X\cup Y\subseteq Z$. So there exists $w \in
 $h^\star - w - u$, hence $d(h^\star,u)\leq 2$.
 \end{proof}
 
-\begin{theorem}[Depth gap in terms of diameter]
-\label{thm:mdst-gap-spectral}
-For any connected graph $G$, $D - D' \leq \mathrm{diam}(G)/2$. In the expander
-regime, where $\lambda_2$ is bounded away from $0$, $\mathrm{diam}(G) = O(\log N)$,
-so $D - D' = O(\log N)$.
-\end{theorem}
-
-\begin{proof}
-We use two elementary facts about eccentricity that hold for \emph{any}
-connected graph and any choice of root.
-
-$D = \mathrm{ecc}_G(h^\star) \leq \mathrm{diam}(G)$. No single vertex's
-eccentricity can exceed the graph's overall diameter: the diameter is the
-maximum eccentricity over all vertices, so every individual eccentricity,
-including $h^\star$'s, is bounded above by it.
-
-$D' = R(G) \geq \mathrm{diam}(G)/2$. Let $c^\star$ achieve the radius, so
-$\mathrm{ecc}_G(c^\star) = D' = R(G)$. For any pair $u,v$ realizing the
-diameter, $d(u,v)=\mathrm{diam}(G)$, the triangle inequality via $c^\star$
-gives $\mathrm{diam}(G) = d(u,v) \leq d(u,c^\star)+d(c^\star,v) \leq
-2\,\mathrm{ecc}_G(c^\star) = 2D'$, so $D' \geq \mathrm{diam}(G)/2$.
-
-Combining,
-\[
-D - D' \leq \mathrm{diam}(G) - \frac{\mathrm{diam}(G)}{2} = \frac{\mathrm{diam}(G)}{2}.
-\]
-In the expander regime $\lambda_2$ is bounded away from $0$, which forces
-$\mathrm{diam}(G) = O(\log N)$ \citep{mohar1991}, giving $D - D' = O(\log N)$.
-\end{proof}
-
 \section{Instantiations: Regret and Best Arm Identification}
 
 \begin{corollary}[Regret matches centralized UCB]
@@ -280,9 +250,9 @@ $P$. Over horizon $T$, the number of completed cycles is
 $\Theta(T/(2D+1))$, so $P = \Theta(NT/(2D+1))$.
 \end{proof}
 
-\begin{corollary}[BAI sample complexity matches Hillel]
+\begin{corollary}[BAI sample complexity matches centralized BAI]
 \label{cor:bai}
-The total number of arm pulls required by EigenTree-BAI to identify $a^\star$ with probability $\geq 1-\delta$ is identical to Hillel's algorithm; the only overhead is $2D$ extra time steps per elimination round.
+The total number of arm pulls required by EigenTree-BAI to identify $a^\star$ with probability $\geq 1-\delta$ is identical to the centralized algorithm of \citet{hillel2013distributed}; the only overhead is $2D+1$ extra time steps per elimination round.
 \end{corollary}
 
 \begin{proof}
@@ -303,10 +273,10 @@ this aggregate, so the sequence of surviving sets $S_1 \supseteq S_2
 round, and the total number of pulls until $|S_r|=1$ is identical.
 
 The only addition is communication. Each round $r$ requires $D$ uplink
-rounds to deliver the round's local sums to the hub, and $D$ downlink
-rounds to broadcast the surviving set $S_r$ and the depth signal: $2D$
-rounds of overhead per elimination round beyond the $L_r$ pull rounds
-themselves.
+rounds to deliver the round's local sums to the hub, one round for the hub
+to apply the elimination rule, and $D$ downlink rounds to broadcast the
+surviving set $S_r$ and the depth signal: $2D+1$ rounds of overhead per
+elimination round beyond the $L_r$ pull rounds themselves.
 \end{proof}
 
 \section{Fault Tolerance}
