@@ -104,11 +104,12 @@ depth. We bound that depth against the shallowest tree any root could achieve.
 
 Any task that can be solved by aggregating observations and then forming a
 decision (a common setup in cooperative multi-agent learning) can run over this
-same hub-and-tree structure by supplying two rules: what each agent contributes
-locally, and what the hub decides from the aggregate. We instantiate these for
-two standard cooperative multi-armed bandit objectives, \emph{regret
-minimization} and \emph{best arm identification} (BAI), and show the hub
-matches centralized performance in both.
+same hub-and-tree structure by supplying a small set of rules, chiefly among
+which 1) what each agent contributes locally, and 2) what the hub decides from
+the aggregate. We instantiate these for two standard cooperative multi-armed
+bandit objectives, \emph{regret minimization} and \emph{best arm
+identification} (BAI), and show the hub matches centralized performance in
+both.
 
 An algorithm which depends on a coordinator, however, introduces a single point
 of failure. If the hub dies, every agent loses the destination its messages
@@ -117,7 +118,7 @@ EigenTree recovers from this by re-running the same election that built the
 tree, with no backup structure and no procedure reserved for the hub. Under
 suitable connectivity assumptions, a node failure changes the graph only
 slightly, so re-election starts warm from the current centralities: the
-survivors settle on a new coordinator and rebuild the tree in the time the
+survivors settle on a new coordinator and rebuild the tree in time the
 first build took.
 
 \paragraph{Contributions.} (1) A fully decentralized protocol for building a
@@ -128,10 +129,10 @@ coordinator is statistically sufficient for any decision rule depending only on
 globally aggregated statistics, instantiated for regret minimization and best
 arm identification, both matching centralized performance up to an $O(D)$
 communication overhead per round, where $D$ is the depth of the induced tree.
-(3) A demonstration that EigenTree is fault-tolerant by construction: the same
-spectral election that builds the tree also rebuilds it after the permanent
-failure of any node, hub or non-hub, through a single procedure whose cost is
-set by the graph's spectral gap.
+(3) A demonstration that EigenTree is fault-tolerant: the same spectral
+election that builds the tree also rebuilds it after the permanent failure of
+any node, hub or non-hub, through a single procedure whose cost is set by the
+graph's spectral gap.
 
 \section{Related Work}
 \label{sec:related}
@@ -376,9 +377,9 @@ After an initialization step, $\textsc{Init}$, agents repeat a fixed cycle of
 four phases: $\textsc{LocalPull}$, $\textsc{Uplink}$, $\textsc{HubDecide}$,
 $\textsc{Downlink}$. An application supplies $\textsc{Init}$,
 $\textsc{LocalPull}$, and $\textsc{HubDecide}$, which fix what each agent
-contributes locally and what the hub decides from the aggregate $B$;
-$\textsc{Uplink}$ and $\textsc{Downlink}$ carry whatever these three produce.
-Any decentralized learning task whose decision rule fits
+contributes locally and what the hub decides from the aggregate $B$, and
+$\textsc{Uplink}$ and $\textsc{Downlink}$, which carry whatever these three
+produce. Any decentralized learning task whose decision rule fits
 Theorem~\ref{thm:coordinator} can run over the same emergent tree this way,
 just by choosing a different instantiation of these functions.
 Table~\ref{tab:instantiations} gives the full cycle for regret minimization and
@@ -747,8 +748,8 @@ hub and the routing tree are read off the graph's own spectrum. The
 two instantiations we give differ only in what each agent contributes and what
 the hub decides from it, so a task that aggregates and then decides needs no
 new protocol, only those two rules. We believe similar graph-topological
-approaches may hold benefits, and it may be a fruitful avenue for further
-research.
+approaches may hold additional benefits, and they may be a fruitful avenue for
+further research.
 
 \bibliography{references}
 
