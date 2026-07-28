@@ -102,7 +102,7 @@ coordinator for any decision rule that depends only on globally aggregated
 per-agent statistics, at the cost of a communication overhead set by the tree's
 depth. We bound that depth against the shallowest tree any root could achieve.
 
-Any task that can be solved by aggregating observations and then form a
+Any task that can be solved by aggregating observations and then forming a
 decision (a common setup in cooperative multi-agent learning) can run over this
 same hub-and-tree structure by supplying two rules: what each agent contributes
 locally, and what the hub decides from the aggregate. We instantiate these for
@@ -276,7 +276,7 @@ provides the motivation for using a communication tree for both aggregation and
 dissemination of state. A complete proof of this proposition, as well as those
 of every other theorem, proposition, and corollary in this paper are given in
 the supplementary material, using matching notation and statement numbering.
-We provide the proof of Theorem~\ref{thm:cooordinator} in the main text as
+We provide the proof of Theorem~\ref{thm:coordinator} in the main text as
 well, since it is the paper's central claim.
 
 \begin{proposition}[Centralized aggregation and broadcast via routing]
@@ -443,8 +443,9 @@ $(\hat n, \hat s, P)$ on the downlink. The scalar $P = \sum_k \hat n_k$ is the
 total pull count across all arms; it is carried alongside $\hat n$, rather than
 recomputed by summing $\hat n$ every round, so that every node applies the same
 exploration bonus without an extra reduction (following
-\citep{martinez2019decentralized}). Each relay cycle lasts $2D+1$ rounds: one
-pull round, $D$ uplink rounds, one hub-decision round, $D$ downlink rounds.
+\citep{martinez2019decentralized}). Each relay cycle lasts $2D+1$ rounds: $D$
+uplink rounds, one HubDecide round in which the hub acts on the completed
+aggregate (here, a UCB pull), and $D$ downlink rounds.
 
 \begin{corollary}[Regret matches centralized UCB]
 \label{cor:regret}
@@ -474,15 +475,16 @@ eliminates every arm more than $\epsilon_r$ below the best empirical mean, $S_r
 = \{k \in S_{r-1} : \bar\mu_k \geq \max_{k'} \bar\mu_{k'} - \epsilon_r\}$, and
 broadcasts $S_r$ on the downlink instead of a running statistic like $(\hat n,
 \hat s, P)$. The hub determines when to stop, once $|S_r|=1$, and this outcome
-is broadcast on the downlink like any other decision. Consequently
-EigenTree-BAI's round length $L_r + 2D$ shrinks across elimination rounds as
-$\epsilon_r$ tightens, unlike EigenTree-UCB's fixed $2D+1$.
+is broadcast on the downlink like any other decision. Each elimination round
+takes $L_r + 2D + 1$ rounds: the $L_r$ pulls from the elimination schedule, plus
+the $2D+1$ communication cost, the same $D$ uplink, one HubDecide round, and $D$
+downlink as EigenTree-UCB.
 
 \begin{corollary}[BAI sample complexity matches centralized BAI]
 \label{cor:bai}
 The total number of arm pulls required by EigenTree-BAI to identify $a^\star$ with
 probability $\geq 1-\delta$ matches the centralized algorithm of
-\citet{hillel2013distributed}; the only overhead is $2D$ extra time steps per
+\citet{hillel2013distributed}; the only overhead is $2D+1$ extra time steps per
 elimination round.
 \end{corollary}
 
@@ -648,7 +650,7 @@ against the centralized reference algorithm \citep{hillel2013distributed} as a
 function of $N$. The two curves stay within $4.5\%$ of each other on average
 across $N \in \{10,\ldots,50\}$, inside the run-to-run standard error, so
 routing the elimination rounds over the tree costs no extra pulls; its only
-price is the $2D$ time steps per round of Corollary~\ref{cor:bai}.
+price is the $2D+1$ time steps per round of Corollary~\ref{cor:bai}.
 
 \begin{figure}[t]
     \centering
@@ -697,18 +699,23 @@ $\tau_{\mathrm{init}}$ and the gossip-round count during setup, never again
 afterward. When a node goes silent, the survivors re-elect a coordinator and
 rebuild the tree over the remaining graph (Section~\ref{sec:ft}).
 
-The main limitation of EigenTree is that its benefits scale with how
-well-expanding a graph is. This regime is generally recognized as an ``easy''
-regime in which most decentralized algorithms converge quickly and perform
-well. Nonetheless, our approach is conceptually simple and performs well SAY THIS BETTER
+The main limitation is that the guarantees of EigenTree are stated in the
+expander regime, where $D$ is $O(\log N)$ and a lost node is repaired quickly.
+On sparse or path-like graphs the tree grows deep and re-election slows as
+$\lambda_2$ shrinks, so the depth bound and the recovery cost degrade together;
+extending the guarantees to those graphs is left for future work.
 
-Another limitation is that of communication rounds overhead. For a system in
-which communication is expensive (as is the case in e.g. EXAMPLES), our setup
-may be at great disadvantage. However, if communication is cheap
-compared to pulling (as is the case in e.g. EXAMPLES; im thinking of expensive simulations maybe who knows),
-then we believe our system to be an interesting avenue due to its simplicity.
-
-MORE LIMITATIONS???
+The second limitation is the latency of the tree. Each decision costs $2D+1$
+rounds of communication, so on links where a message costs more than a pull, as
+on battery-powered sensor motes where the radio dominates the energy budget, the
+tree can cost more than it saves. The trade reverses when a pull is expensive and
+no central coordinator is available. Take cross-institution model selection: $N$
+hospitals share $K$ candidate models, a pull trains one candidate on a site's
+private records, and the only message is its validation score. No site may hold
+the pooled data and none is a fixed hub, so the coordinator must emerge from the
+graph. Training dominates by orders of magnitude, the $2D+1$ routing rounds
+vanish against it, and the emergent hub reaches the same choice on the pulls one
+site alone would spend.
 
 \section{Conclusion}
 \label{sec:conclusion}
