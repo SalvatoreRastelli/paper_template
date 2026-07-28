@@ -1,0 +1,37 @@
+# merw.mplstyle — LaTeX-compiled PDF style for all MERW plots
+
+text.usetex        : True
+text.latex.preamble: \usepackage{amsmath} \usepackage{amssymb}
+
+font.family  : serif
+font.serif   : Computer Modern Roman
+font.size    : 8
+
+axes.titlesize  : 8
+axes.labelsize  : 8
+axes.linewidth  : 0.8
+axes.grid : True
+# Okabe-Ito colorblind-safe cycle: blue, orange, bluish-green, vermillion,
+# sky-blue, reddish-purple, yellow. C0..C6 map to these everywhere.
+axes.prop_cycle : cycler('color', ['0072B2', 'E69F00', '009E73', 'D55E00', '56B4E9', 'CC79A7', 'F0E442'])
+
+xtick.labelsize    : 8
+ytick.labelsize    : 8
+xtick.direction    : in
+ytick.direction    : in
+xtick.major.width  : 0.8
+ytick.major.width  : 0.8
+
+lines.linewidth  : 1.2
+lines.markersize : 5
+
+legend.fontsize    : 8
+legend.framealpha  : 0.9
+legend.edgecolor   : 0.8
+
+figure.dpi         : 150
+savefig.dpi        : 300
+savefig.pad_inches : 0.02
+savefig.format     : pdf
+
+patch.linewidth : 0.8

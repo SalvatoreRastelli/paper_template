@@ -487,6 +487,34 @@ hub, so it composes without modification with any prior sequence of
 re-elections.
 \end{proof}
 
+\section{Reproducibility}
+\label{sec:reproducibility}
+
+\paragraph{Computing infrastructure.} All experiments run on CPU only, on an
+Apple M1 Pro with 16\,GB of RAM under macOS~26.5. The code is pure Python and
+uses no GPU.
+
+\paragraph{Software.} Python~3.12 with NumPy~2.4, NetworkX~3.6, and
+Matplotlib~3.10; no other third-party libraries are required. The three scripts
+in the code archive (\texttt{regret\_min.py}, \texttt{best\_arm\_id.py},
+\texttt{fault\_tolerance.py}) are self-contained and share no imports.
+
+\paragraph{Randomness and seeds.} Every experiment is fully deterministic given
+its seed. A master \texttt{RandomState} seeded at a fixed value derives one graph
+seed, held constant across all runs so every algorithm is compared on the same
+graph, and one independent per-run seed; each run reseeds the generator from its
+per-run seed before drawing rewards. Graph generation, arm means, and reward
+draws all flow from these seeds, so rerunning a script reproduces the reported
+curves exactly.
+
+\paragraph{Parameters.} All experiments use the settings stated in the main
+text: for regret minimization, $N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs; for
+best arm identification, $K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N \in
+\{10,20,30,40,50\}$; for fault tolerance, $N=20$, $p=0.5$, $K=10$, $T=2000$,
+with the hub killed at $t=500,1000,1500$. The UCB exploration constant is $c=2$
+and the sub-Gaussian parameter is $\sigma=1$. Reported quantities are means over
+the runs, with standard error of the mean shown as shaded bands or error bars.
+
 \bibliography{references}
 
 \end{document}
