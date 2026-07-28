@@ -388,7 +388,7 @@ best arm identification, detailed in the two subsections below.
 \caption{EigenTree (generic protocol)}
 \label{alg:merw-generic}
 \begin{algorithmic}[1]
-\STATE \textbf{Require:} graph $G$; hooks $\textsc{Init}$, $\textsc{LocalPull}$, $\textsc{HubDecide}$; a stopping condition on $t$ or on a hub-computed flag $\mathrm{done}$
+\STATE \textbf{Require:} graph $G$; hooks $\textsc{Init}$, $\textsc{LocalPull}$, $\textsc{HubDecide}$, $\textsc{Uplink}$, $\textsc{Downlink}$; a stopping condition on $t$ or on a hub-computed flag $\mathrm{done}$
 \STATE Compute $\tilde\psi$ via distributed power iteration; run max-flooding to obtain tree $\mathcal{T}$ rooted at $h^\star$
 \STATE $t \leftarrow 0$; $\mathrm{done} \leftarrow \textbf{false}$; each node $i$ knows only $\mathrm{par}(i)$ so far
 \FORALL{$i \in V$}
@@ -398,9 +398,9 @@ best arm identification, detailed in the two subsections below.
     \FORALL{$i \in V$}
         \STATE $(b_i, \sigma_i) \leftarrow \textsc{LocalPull}(\sigma_i)$; $t \mathrel{+}= (\text{rounds used})$
     \ENDFOR
-    \STATE \emph{Uplink}: every node forwards $b_i$ toward $h^\star$ once it has heard from all its children; the hub absorbs packets until a round passes with none arriving, yielding $B = \sum_i b_i$ (Prop.~\ref{prop:aggbcast}); no node needs $D$ in advance
+	\STATE $\textsc{Uplink}()$
     \STATE $(m, \mathrm{done}) \leftarrow \textsc{HubDecide}(B)$; $t \mathrel{+}= 1$
-    \STATE \emph{Downlink}: hub sends $(m, D, \mathrm{done}, \mathrm{hops}{=}0)$ to $\mathrm{ch}(h^\star)$; each node that receives $(m, D, \mathrm{done}, \mathrm{hops})$ sets its own depth $d_i \leftarrow \mathrm{hops}+1$, updates $\sigma_i$ from $m$, and forwards $\mathrm{hops}{+}1$ to its children; this is how every node first learns $D$ and $d_i$
+	\STATE $\textsc{Downlink}()$
 \UNTIL{$\mathrm{done}$ \textbf{or} $t \geq T$}
 \end{algorithmic}
 \end{algorithm}
@@ -453,7 +453,7 @@ total pull count across all arms; it is carried alongside $\hat n$, rather than
 recomputed by summing $\hat n$ every round, so that every node applies the same
 exploration bonus without an extra reduction (following
 \citep{martinez2019decentralized}). Each relay cycle lasts $2D+1$ rounds: $D$
-uplink rounds, one HubDecide round in which the hub acts on the completed
+uplink rounds, one $\textsc{HubDecide}$ round in which the hub acts on the completed
 aggregate (here, a UCB pull), and $D$ downlink rounds.
 
 \begin{corollary}[Regret matches centralized UCB]
@@ -486,7 +486,7 @@ broadcasts $S_r$ on the downlink instead of a running statistic like $(\hat n,
 \hat s, P)$. The hub determines when to stop, once $|S_r|=1$, and this outcome
 is broadcast on the downlink like any other decision. Each elimination round
 takes $L_r + 2D + 1$ rounds: the $L_r$ pulls from the elimination schedule, plus
-the $2D+1$ communication cost, the same $D$ uplink, one HubDecide round, and $D$
+the $2D+1$ communication cost, the same $D$ uplink, one $\textsc{HubDecide}$ round, and $D$
 downlink as EigenTree-UCB.
 
 \begin{corollary}[BAI sample complexity matches centralized BAI]
@@ -508,17 +508,17 @@ elimination round.
 & \textbf{Function} & \textbf{Description / Behavior} \\
 \midrule
 % --- FIRST INSTANTIATION ---
-\textbf{EigenTree-UCB} & \textsc{Init} 			& pull each $k\in\{1,..,K\}$ once, $K$ rounds \\
-			       & \textsc{Local-Pull}    & UCB-maximizing arm, 1 round \\
+\textbf{EigenTree-UCB} & \textsc{Init} 	    & pull each $k\in\{1,..,K\}$ once, $K$ rounds \\
+			       & \textsc{LocalPull}     & UCB-maximizing arm, 1 round \\
                    & \textsc{Uplink}        & per-arm pull counts and reward sums since last cycle, $(n_i,s_i)$ \\
-                   & \textsc{Hub-Decide}    & UCB-pull on $B$; never stops early \\
+                   & \textsc{HubDecide}     & UCB-pull on $B$; never stops early \\
                    & \textsc{Downlink}      & aggregate $(\hat n,\hat s,P)$ \\
 \midrule
 % --- SECOND INSTANTIATION ---
-\textbf{EigenTree-BAI} & \textsc{Init}       & $\sigma_i \leftarrow S_0$, 0 rounds \\
-			       & \textsc{Local-Pull} & every $k\in S_{r-1}$, $L_r$ times \\
+\textbf{EigenTree-BAI} & \textsc{Init}   & $\sigma_i \leftarrow S_0$, 0 rounds \\
+			       & \textsc{LocalPull}  & every $k\in S_{r-1}$, $L_r$ times \\
                    & \textsc{Uplink}     & per-arm reward sums over $S_{r-1}$ this round, $b_i$ \\
-                   & \textsc{Hub-Decide} & eliminate below $\epsilon_r$; stop when $|S_r|{=}1$ \\
+                   & \textsc{HubDecide}  & eliminate below $\epsilon_r$; stop when $|S_r|{=}1$ \\
                    & \textsc{Downlink}   & surviving set $S_r$ \\
 \bottomrule
 \end{tabularx}
@@ -598,19 +598,18 @@ initializer.
 \label{sec:sync}
 
 Before the survivors can re-run the iteration they must agree, without a
-coordinator, that a failure happened and start together. Every node
-already learned its depth $d_i$ and the tree height $D$ from the first
-downlink (the Downlink phase of Algorithm~\ref{alg:merw-generic}), where depth is just
-the hop count that message carried; every ordinary cycle is one
+coordinator, that a failure happened and start together. Every node already
+learned its depth $d_i$ and the tree height $D$ from the first downlink (the
+$\textsc{Downlink}$ phase of Algorithm~\ref{alg:merw-generic}), where depth is
+just the hop count that message carried; every ordinary cycle is one
 uplink-and-downlink traversal of $2D+1$ hops, and detection reuses this
 schedule directly. Each node runs one uniform timer $\tau = 2D+1$ hops, the
 length of a cycle, and suspects a neighbor dead when its expected message
 misses that window; the rule is identical for every node, and the hub is
 detected by its children exactly as any node is detected by its parent. A dead
-node severs the tree into components, each announced by its own first
-detector and flooded through its intact component; the uniform timer keeps
-detectors within $D$ hops of each other, and a flood spans a component in $D$
-hops.
+node severs the tree into components, each announced by its own first detector
+and flooded through its intact component; the uniform timer keeps detectors
+within $D$ hops of each other, and a flood spans a component in $D$ hops.
 
 \begin{proposition}[Failure horizon]
 \label{prop:horizon}
@@ -747,8 +746,9 @@ overhead per round. Additionally, in the expander regime, we show the fault
 tolerance properties of our scheme.
 
 In the broader context of cooperative multi-agent learning, our work shifts the
-focus on the connectivity graph itself. We believe this approach may hold
-further benefits, and it may be a fruitful avenue for further research.
+focus on the connectivity graph itself. We believe similar graph-topological
+approaches may hold benefits, and it may be a fruitful avenue for further
+research.
 
 \bibliography{references}
 
