@@ -699,26 +699,21 @@ penalty.
 
 \section{Discussion}
 \label{sec:discussion}
+EigenTree needs a connected undirected graph, synchronous rounds, and a known
+$N$. The graph stays connected except for the node failures the protocol
+handles, and $N$ enters only through the round budgets and the elimination
+schedule.
 
-Section~\ref{sec:mdst-gap} bounds the gap between $D$ and $D'$ on dense
-graphs, where it is at most one hop, and shows that on sparse expanders the
-MDST is itself logarithmically deep. A bound on $D$ that covers sparse
-expanders directly, and other random graph models, is left for future work.
-
-The graph must be connected and undirected, and stays that way except for
-the node failures EigenTree handles. $D$ can be large on sparse or path-like
-graphs; this is exactly the regime Section~\ref{sec:mdst-gap} identifies.
-BAI needs $N$ inside the elimination schedule of \citet{hillel2013distributed}
-itself, before the very first round; regret minimization only needs $N$ to set
-$\tau_{\mathrm{init}}$ and the gossip-round count during setup, never again
-afterward. When a node goes silent, the survivors re-elect a coordinator and
-rebuild the tree over the remaining graph (Section~\ref{sec:ft}).
-
-The main limitation is that the guarantees of EigenTree are stated in the
-expander regime, where $D$ is $O(\log N)$ and a lost node is repaired quickly.
-On sparse or path-like graphs the tree grows deep and re-election slows as
-$\lambda_2$ shrinks, so the depth bound and the recovery cost degrade together;
-extending the guarantees to those graphs is left for future work.
+The main limitation is that the guarantees are stated in the expander regime.
+Outside it the protocol still runs, but its two costs degrade together: the
+tree grows deep on sparse or path-like graphs, and re-election slows as
+$\lambda_2$ shrinks, since routing depth and spectral contraction are both
+governed by expansion. Within the regime, Section~\ref{sec:mdst-gap} bounds the
+depth against the shallowest tree any root could achieve on dense graphs, where
+the gap is at most one hop, and shows that on sparse expanders even an optimal
+root gives a logarithmically deep tree. What is still missing there is a direct
+upper bound on the depth max-flooding produces; that, and the extension to
+other random graph models, are left for future work.
 
 The second limitation is the latency of the tree. Each decision costs $2D+1$
 rounds of communication, so on links where a message costs more than a pull, as
@@ -746,7 +741,12 @@ overhead per round. Additionally, in the expander regime, we show the fault
 tolerance properties of our scheme.
 
 In the broader context of cooperative multi-agent learning, our work shifts the
-focus on the connectivity graph itself. We believe similar graph-topological
+focus on the connectivity graph itself. Where existing methods fix the
+communication scheme in advance and layer an averaging rule over it, here the
+hub and the routing tree are read off the graph's own spectrum. The
+two instantiations we give differ only in what each agent contributes and what
+the hub decides from it, so a task that aggregates and then decides needs no
+new protocol, only those two rules. We believe similar graph-topological
 approaches may hold benefits, and it may be a fruitful avenue for further
 research.
 
