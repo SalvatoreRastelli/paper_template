@@ -26,11 +26,11 @@ import matplotlib.patches as mpatches
 from pathlib import Path
 plt.style.use(Path(__file__).resolve().parent / "merw.mplstyle")
 
-RESULTS_DIR  = Path(__file__).resolve().parent.parent / "paper" / "results"
+RESULTS_DIR  = Path(__file__).resolve().parent.parent / "results"
 MERW_VIZ_DIR = RESULTS_DIR / "MERW_visualization"
 MERW_VIZ_DIR.mkdir(parents=True, exist_ok=True)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "paper" / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 NODES_CSV = DATA_DIR / "relay_cycle_nodes.csv"
 EDGES_CSV = DATA_DIR / "relay_cycle_edges.csv"

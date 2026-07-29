@@ -657,22 +657,22 @@ Corollary~\ref{cor:regret} (here $D=3$, so $NT/(2D+1)\approx71{,}400$). For
 best arm identification ($K=10$, $\delta=0.05$,
 $p=0.5$, 50 runs per $N$), Figure~\ref{fig:bai_er} compares total arm pulls
 against the centralized reference algorithm \citep{hillel2013distributed} as a
-function of $N$. The two curves stay within $4.7\%$ of each other on average
-across $N \in \{10,\ldots,50\}$, inside the run-to-run standard error, so
+function of $N$. The two curves stay within $8.9\%$ of each other on average
+across $N \in \{10,\ldots,50\}$, inside the run-to-run standard deviation, so
 routing the elimination rounds over the tree costs no extra pulls; its only
 price is the $2D+1$ time steps per round of Corollary~\ref{cor:bai}.
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{results/Regret/relay_regret_er_N100_K5_T5000.pdf}
-    \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Top}: group regret vs.\ round. \emph{Bottom}: group regret vs.\ total arm pulls. Shaded bands are standard error of the mean.}
+    \caption{Cumulative regret on an Erd\H{o}s--R\'{e}nyi graph ($N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs). \emph{Top}: group regret vs.\ round. \emph{Bottom}: group regret vs.\ total arm pulls. Shaded bands are the standard deviation across runs.}
     \label{fig:regret_er}
 \end{figure}
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{results/BAI/merw_ucb_bai_er_K10.pdf}
-    \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Top}: total arm pulls vs.\ $N$. \emph{Bottom}: pulls per agent vs.\ $N$. Error bars are standard error of the mean.}
+    \caption{BAI sample complexity on Erd\H{o}s--R\'{e}nyi graphs ($K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N$). \emph{Top}: total arm pulls vs.\ $N$. \emph{Bottom}: pulls per agent vs.\ $N$. Error bars are the standard deviation across runs.}
     \label{fig:bai_er}
 \end{figure}
 

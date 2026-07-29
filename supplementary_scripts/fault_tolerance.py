@@ -25,11 +25,14 @@ import numpy as np
 import networkx as nx
 warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
 
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "paper" / "results"
+# Self-contained: this archive writes its own data/ and results/ beside
+# the scripts, so it can be unpacked and run anywhere without the
+# surrounding repository.
+RESULTS_DIR = Path(__file__).resolve().parent / "results"
 FT_DIR      = RESULTS_DIR / "FaultTolerance"
 FT_DIR.mkdir(parents=True, exist_ok=True)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "paper" / "data"
+DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 

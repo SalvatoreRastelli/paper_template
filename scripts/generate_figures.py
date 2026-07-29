@@ -6,8 +6,8 @@ same arguments as MERW's own (currently disabled) GitHub Actions recipe.
 
 Each underlying script supports --mode {compute,plot,all}:
   compute - run the (possibly expensive) simulation/eigenvector computation
-            and write the raw results to paper/data/*.csv. No figure is drawn.
-  plot    - read paper/data/*.csv and render the PDF into paper/results/.
+            and write the raw results to data//*.csv. No figure is drawn.
+  plot    - read data//*.csv and render the PDF into results//.
             Cheap; this is what CI runs.
   all     - compute then plot in one go (useful for local one-shot runs).
 
@@ -16,7 +16,7 @@ This script mirrors that split:
     uv run python scripts/generate_figures.py --mode plot      # CI, fast
     uv run python scripts/generate_figures.py --mode all       # local, one-shot
 
-The compute step should be run locally and its paper/data/*.csv output
+The compute step should be run locally and its data//*.csv output
 committed to the repository; CI then only re-renders figures from that
 committed data, so it never re-runs the Monte Carlo experiments.
 """
@@ -112,8 +112,8 @@ def generate(mode):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--mode", choices=("compute", "plot", "all"), default="all",
-                   help="compute: run experiments, save paper/data/*.csv only; "
-                        "plot: render figures from existing paper/data/*.csv; "
+                   help="compute: run experiments, save data//*.csv only; "
+                        "plot: render figures from existing data//*.csv; "
                         "all: compute then plot (default)")
     args = p.parse_args()
     generate(args.mode)

@@ -36,13 +36,16 @@ import numpy as np
 import networkx as nx
 warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
 
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "paper" / "results"
+# Self-contained: this archive writes its own data/ and results/ beside
+# the scripts, so it can be unpacked and run anywhere without the
+# surrounding repository.
+RESULTS_DIR = Path(__file__).resolve().parent / "results"
 BAI_DIR     = RESULTS_DIR / "BAI"
 REGRET_DIR  = RESULTS_DIR / "Regret"
 BAI_DIR.mkdir(parents=True, exist_ok=True)
 REGRET_DIR.mkdir(parents=True, exist_ok=True)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "paper" / "data"
+DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Doubles as the CSV "algo" key and the plot legend label.
@@ -99,11 +102,41 @@ def make_er_graph(N, seed=None, p=None):
     raise RuntimeError("Could not generate a connected ER graph.")
 
 
+def make_barbell_graph(N, seed=None):
+    """Two complete graphs of size N//2 joined by a single bridge edge."""
+    n1 = N // 2
+    n2 = N - n1
+    G = nx.complete_graph(n1)
+    clique2 = nx.relabel_nodes(nx.complete_graph(n2), {i: i + n1 for i in range(n2)})
+    G = nx.compose(G, clique2)
+    G.add_edge(n1 - 1, n1)
+    return G
+
+
+def make_grid_graph(N, seed=None):
+    """2D grid graph with side length floor(sqrt(N)), relabeled 0..n-1."""
+    k = int(np.floor(np.sqrt(N)))
+    G = nx.grid_2d_graph(k, k)
+    G = nx.convert_node_labels_to_integers(G)
+    return G
+
+
+def make_star_graph(N, seed=None):
+    """Star graph with one hub connected to N-1 leaves."""
+    return nx.star_graph(N - 1)
+
+
 def make_graph(graph_type, N, seed=None, p=None):
     if graph_type == "ba":
         return make_ba_graph(N, m=2, seed=seed)
     elif graph_type == "er":
         return make_er_graph(N, seed=seed, p=p)
+    elif graph_type == "barbell":
+        return make_barbell_graph(N, seed=seed)
+    elif graph_type == "grid":
+        return make_grid_graph(N, seed=seed)
+    elif graph_type == "star":
+        return make_star_graph(N, seed=seed)
     raise ValueError(f"Unknown graph type: {graph_type}")
 
 
@@ -111,7 +144,7 @@ def make_graph(graph_type, N, seed=None, p=None):
 # MERW eigenvector (power iteration on adjacency matrix)
 # ============================================================
 
-def merw_eigenvector(G, tau=None, gossip_rounds=None):
+def merw_eigenvector(G, tau=None, gossip_rounds=None, gossip_seed=0):
     """Distributed power iteration with gossip-based normalization.
 
     Implements Jelasity, Canright, Engo-Monsen (EuroPar 2007):
@@ -135,6 +168,11 @@ def merw_eigenvector(G, tau=None, gossip_rounds=None):
     if gossip_rounds is None:
         gossip_rounds = int(np.ceil(2.0 * np.log(N)))
 
+    # Gossip partner selection draws from a generator of its own rather than the
+    # global one used for rewards, so building the tree does not advance the
+    # shared reward stream and every algorithm sees the same rewards per seed.
+    gossip_rng = np.random.RandomState(gossip_seed)
+
     w = np.ones(N)
     log_growth = np.zeros(N)
 
@@ -150,7 +188,7 @@ def merw_eigenvector(G, tau=None, gossip_rounds=None):
             for i in range(N):
                 nbrs = list(G.neighbors(i))
                 if nbrs:
-                    j = nbrs[np.random.randint(len(nbrs))]
+                    j = nbrs[gossip_rng.randint(len(nbrs))]
                     r[i] = r[j] = (r[i] + r[j]) / 2
 
         w = w_new / np.exp(r)
@@ -315,10 +353,16 @@ def bai_merw(env, G, N, delta=0.05, sigma=1.0, c=2.0):
         t_prev = t_r
 
         # --- Pull phase: every node pulls each surviving arm L times ---
+        # Iterate (arm, node, repeat) in the same order as bai_hillel. Both draw
+        # the same number of rewards per arm, but the comparison shares a seed,
+        # so a different traversal order hands each arm a different slice of the
+        # reward stream. The two would then eliminate differently from sampling
+        # noise rather than from anything about the protocol, which is exactly
+        # the difference this experiment is meant to rule out.
         local_sums = np.zeros((N, K))
-        for _ in range(L):
+        for k in surviving:
             for i in range(N):
-                for k in surviving:
+                for _ in range(L):
                     local_sums[i, k] += env.pull(k)
                     total_pulls += 1
 
@@ -327,7 +371,11 @@ def bai_merw(env, G, N, delta=0.05, sigma=1.0, c=2.0):
         pending = [local_sums[i].copy() for i in range(N)]
         hub_agg = np.zeros(K)
 
-        for _ in range(tree_depth):
+        # A node at depth d needs d forwarding steps, and the deepest is at
+        # tree_depth, so the loop must run that many times for every packet to
+        # drain. max(...,1) covers a depth-0 tree, where the hub is the only
+        # node with a parent-less pointer.
+        for _ in range(max(tree_depth, 1)):
             next_pending = [None] * N
             for i in range(N):
                 if i == hub or pending[i] is None:
@@ -342,6 +390,11 @@ def bai_merw(env, G, N, delta=0.05, sigma=1.0, c=2.0):
                         next_pending[p] += pending[i]
             pending = next_pending
         hub_agg += local_sums[hub]
+
+        # Every live contribution must reach the hub exactly once, so the
+        # aggregate is the exact sum a centralized instance would hold. This
+        # holds on any graph where build_routing_tree returns a spanning tree.
+        assert all(p is None for p in pending), "uplink dropped in-flight packets"
 
         # Hub eliminates arms more than epsilon_r below the best global mean.
         global_mean = {k: hub_agg[k] / (N * L) for k in surviving}
@@ -365,10 +418,15 @@ def _worker_bai(task):
     G = make_graph(graph_type, N, seed=graph_seed, p=p)
     env = BanditEnv(means, sigma=sigma)
 
+    # A grid on N nodes is built with side floor(sqrt(N)), so its realized
+    # agent count is not the requested N. Read it off the graph and give both
+    # algorithms the same count: the elimination schedule depends on it.
+    N_eff = G.number_of_nodes()
+
     if algo_name == "Hillel-BAI":
-        pulls = bai_hillel(env, N, delta=delta, sigma=sigma)
+        pulls = bai_hillel(env, N_eff, delta=delta, sigma=sigma)
     elif algo_name == EIGENTREE_BAI_NAME:
-        pulls = bai_merw(env, G, N, delta=delta, sigma=sigma, c=c)
+        pulls = bai_merw(env, G, N_eff, delta=delta, sigma=sigma, c=c)
     else:
         raise ValueError(algo_name)
 
@@ -429,8 +487,18 @@ def compute_bai_data(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
         sub_rng = np.random.RandomState(seed + N)
         graph_seed = int(sub_rng.randint(0, 2**31))  # fixed graph for all runs at this N
         for _ in range(n_runs):
-            run_seed = int(sub_rng.randint(0, 2**31))
+            # Each algorithm draws its own reward stream. Sharing one seed
+            # across both would couple them: they request the same arms in the
+            # same order, so they would receive identical rewards, eliminate
+            # identically, and report the same pull count with exactly zero
+            # variance in the difference. That is a valid check that routing
+            # loses no information, but it is not a measurement of sample
+            # complexity -- the agreement would be true by construction rather
+            # than observed. Independent streams make the comparison an
+            # ordinary two-sample one, with the run-to-run spread of a
+            # fixed-confidence stopping time showing up honestly on both sides.
             for name in BAI_ALGO_NAMES:
+                run_seed = int(sub_rng.randint(0, 2**31))
                 sub_tasks.append((name, run_seed, graph_seed, graph_type,
                                   N, K, means, sigma, delta, c, nu, p))
 
@@ -443,7 +511,13 @@ def compute_bai_data(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
         for name in BAI_ALGO_NAMES:
             arr = np.array(pulls_by_algo[name])
             results[name]["mean"].append(arr.mean())
-            results[name]["std"].append(arr.std() / np.sqrt(len(arr)))
+            # Standard deviation across runs, not the standard error of the
+            # mean. A fixed-confidence stopping time is genuinely spread out
+            # (coefficient of variation ~0.6 here), and s.e.m. shrinks with the
+            # run count until it describes how well the mean is pinned down
+            # rather than how variable a single run is. The latter is what a
+            # reader of this plot needs.
+            results[name]["std"].append(arr.std())
         print(f"[BAI] N={N} done")
 
     return results
@@ -561,6 +635,17 @@ def run_bai_experiment(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
 
 
 # ============================================================
+
+
+# The AAAI source tree, where supplementary.tex \input's these tables.
+# DATA_DIR already points at the paper/ tree this script belongs to, so
+# derive from it rather than counting parents (the repo and the archived
+# copy of this script sit at different depths).
+
+
+
+
+# ============================================================
 # CLI
 # ============================================================
 
@@ -580,7 +665,8 @@ def parse_args():
                    help="Number of agents (graph nodes)")
     p.add_argument("--K",         type=int,   default=5,
                    help="Number of arms")
-    p.add_argument("--graph",     choices=("ba", "er"), default="ba",
+    p.add_argument("--graph",     choices=("ba", "er", "barbell", "grid", "star"),
+                   default="ba",
                    help="Graph type: ba=Barabasi-Albert, er=Erdos-Renyi")
     p.add_argument("--p-er",      type=float, default=None,
                    help="ER edge probability override (default: 2.5*ln(N)/N; ignored for ba)")

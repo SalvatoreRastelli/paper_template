@@ -23,13 +23,16 @@ import numpy as np
 import networkx as nx
 warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
 
-RESULTS_DIR  = Path(__file__).resolve().parent.parent / "paper" / "results"
+# Self-contained: this archive writes its own data/ and results/ beside
+# the scripts, so it can be unpacked and run anywhere without the
+# surrounding repository.
+RESULTS_DIR  = Path(__file__).resolve().parent / "results"
 REGRET_DIR   = RESULTS_DIR / "Regret"
 MERW_VIZ_DIR = RESULTS_DIR / "MERW_visualization"
 REGRET_DIR.mkdir(parents=True, exist_ok=True)
 MERW_VIZ_DIR.mkdir(parents=True, exist_ok=True)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "paper" / "data"
+DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Doubles as the CSV "algo" key and the plot legend label.
@@ -152,7 +155,7 @@ def make_graph(graph_type, N, seed=None, p=None):
 # MERW eigenvector
 # ============================================================
 
-def merw_eigenvector(G, tau=None, gossip_rounds=None):
+def merw_eigenvector(G, tau=None, gossip_rounds=None, gossip_seed=0):
     """Distributed power iteration with gossip-based normalization.
 
     Implements Jelasity, Canright, Engo-Monsen (EuroPar 2007):
@@ -176,6 +179,11 @@ def merw_eigenvector(G, tau=None, gossip_rounds=None):
     if gossip_rounds is None:
         gossip_rounds = int(np.ceil(2.0 * np.log(N)))
 
+    # Gossip partner selection draws from a generator of its own rather than the
+    # global one used for rewards, so building the tree does not advance the
+    # shared reward stream and every algorithm sees the same rewards per seed.
+    gossip_rng = np.random.RandomState(gossip_seed)
+
     w = np.ones(N)
     log_growth = np.zeros(N)
 
@@ -191,7 +199,7 @@ def merw_eigenvector(G, tau=None, gossip_rounds=None):
             for i in range(N):
                 nbrs = list(G.neighbors(i))
                 if nbrs:
-                    j = nbrs[np.random.randint(len(nbrs))]
+                    j = nbrs[gossip_rng.randint(len(nbrs))]
                     r[i] = r[j] = (r[i] + r[j]) / 2
 
         w = w_new / np.exp(r)
@@ -808,6 +816,26 @@ def run_experiment(n_runs, T, N, K, graph_type, sigma, c, n_workers, mode="all",
         results = load_regret_csv(graph_type, N, K, T)
     plot_regret(results, T, N, K, graph_type, n_runs)
 
+
+# ============================================================
+
+
+# The AAAI source tree, where supplementary.tex \input's this table. DATA_DIR
+# already points at the paper/ tree this script belongs to, so derive from it
+# rather than counting parents.
+
+
+
+
+def _at_budget(xs, ys, x):
+    """Linear interpolation of ys at x; xs nondecreasing."""
+    if x <= xs[0]:
+        return ys[0]
+    for i in range(1, len(xs)):
+        if xs[i] >= x:
+            x0, x1, y0, y1 = xs[i - 1], xs[i], ys[i - 1], ys[i]
+            return y1 if x1 == x0 else y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return ys[-1]
 
 
 # ============================================================

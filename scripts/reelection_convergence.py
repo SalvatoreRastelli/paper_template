@@ -56,11 +56,11 @@ from fault_tolerance import (
     build_routing_tree,
 )
 
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "paper" / "results"
+RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 OUT_DIR     = RESULTS_DIR / "FaultTolerance"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "paper" / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 

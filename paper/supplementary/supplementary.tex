@@ -1,0 +1,805 @@
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage[submission]{aaai2027}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{booktabs}
+\usepackage{xspace}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+% A result that also appears in the main text keeps the number it carries
+% there, so the two documents can be read side by side. Results that exist only
+% in this document use a separate S-series (Proposition S1, Theorem S1, ...),
+% which cannot collide with a main-text number however either document grows.
+\newtheorem{sproposition}{Proposition S}
+\newtheorem{stheorem}{Theorem S}
+
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+
+\setcounter{secnumdepth}{2}
+
+\title{Supplementary Material:\\EigenTree: a Centralizing Communication Protocol\\for Decentralized Multi-Agent Multi-Armed Bandit}
+\author{
+    Anonymous Submission
+}
+\affiliations{
+    %
+}
+
+\begin{document}
+
+\nocopyright
+
+\maketitle
+
+Notation follows the main paper throughout. $G=(V,E)$ is the underlying
+graph, $N=|V|$, and $A$ its adjacency matrix. $\tilde\psi$ is the
+(unnormalized, locally computed) leading eigenvector of $A$, with eigenvalue
+$\lambda$, and $h^\star=\arg\max_i\tilde\psi_i$ is the hub. $\mathcal{T}$ is
+the induced routing tree and $D$ its height. $\mathrm{par}(i)$, $\mathrm{ch}(i)$, and
+$d_i$ denote a node's parent, children, and depth in $\mathcal{T}$, and
+$\mathcal{N}_G(i)$ denotes node $i$'s neighbor set in $G$. We restate the one
+standing assumption, since several results below are stated under it.
+
+\begin{definition}[Expander regime]
+\label{def:expander}
+A family of graphs $\{G_N\}$ is in the expander regime if its algebraic
+connectivity $\lambda_2$ (the second-smallest eigenvalue of the Laplacian) is
+bounded below by a constant $c>0$ independent of $N$. We say a graph $G$ is in
+the regime when it belongs to such a family, and treat $c$ as a constant in all
+$N$-dependent bounds.
+\end{definition}
+
+\section{Hub Emergence, Routing, and Coordinator Sufficiency}
+
+\begin{proposition}[Centralized aggregation and broadcast via routing]
+\label{prop:aggbcast}
+Suppose each node $i$ holds a scalar $x_i$ and propagates it toward
+$h^\star$ one hop per round, with each intermediate node forwarding the sum
+it received. Then the hub holds $\sum_i x_i$ after $D$ rounds, where $D$ is
+the tree height. Symmetrically, a value broadcast from $h^\star$ one hop
+per round reaches every node after $D$ rounds. Neither direction requires
+any node to know $D$ in advance: the uplink terminates when the hub
+observes a round with no incoming packets, and each node infers its own
+depth $d_i$ from the hop count carried on the first downlink it receives.
+\end{proposition}
+
+\begin{proof}
+\textbf{Uplink.} We show by induction on depth, from the leaves upward,
+that every node at depth $d$ has forwarded the sum of its entire subtree's
+values to its parent by the end of round $D-d+1$.
+
+\emph{Base case.} A leaf $\ell$ at depth $d_\ell$ has no children, so its
+subtree sum is simply $x_\ell$. It has nothing to wait for, so it forwards
+$x_\ell$ to $\mathrm{par}(\ell)$ in round 1.
+
+\emph{Inductive step.} Suppose every node at depth $d+1$ has forwarded its
+subtree sum to its parent by the end of round $D-(d+1)+1 = D-d$. A node $i$
+at depth $d$ with children $\mathrm{ch}(i)$ waits until it has received a
+forwarded value from every child. Each child's value arrives no later than
+round $D-d$ by the inductive hypothesis. Node $i$ sums these values
+together with its own $x_i$ and forwards the total to $\mathrm{par}(i)$ in
+round $D-d+1$.
+
+Since $h^\star$ is at depth 0, the induction applied down to $d=1$ shows
+every direct child of $h^\star$ has forwarded its subtree sum by round $D$.
+The hub receives all of these by round $D$ and sums them with its own
+$x_{h^\star}$ to obtain $\sum_i x_i$.
+
+\emph{Termination without knowing $D$.} A node $i$ at depth $d$ cannot know
+$D$, but it does not need to: it simply waits until every child, a fixed
+and locally known set, has sent its value, then forwards. The hub likewise
+does not know $D$ in advance. It accumulates incoming packets each round
+and declares the uplink complete once a round passes with no new arrivals.
+Every node forwards exactly once, by the induction above, so the hub
+receives no further packets after round $D$, and this silence is a purely
+local observation.
+
+\textbf{Downlink.} A symmetric induction on depth, from the root downward,
+gives the same result. $h^\star$ sends $v$ to $\mathrm{ch}(h^\star)$ in
+round 1, tagged with hop count $0$. A node at depth $d$ receiving $(v,
+\mathrm{hops}=d-1)$ sets its own depth $d_i \leftarrow (d-1)+1 = d$, which
+is correct since it is exactly $d$ hops from $h^\star$ along tree edges,
+and forwards $(v, \mathrm{hops}=d)$ to its own children in the next round.
+By induction, every node at depth $d$ receives $v$ in round $d$, so every
+node receives $v$ within $D$ rounds. Each node's depth is derived purely
+from the hop count it personally receives, with no global knowledge
+required.
+\end{proof}
+
+\begin{theorem}[Coordinator sufficiency]
+\label{thm:coordinator}
+Let $\mathcal{A}$ be any decision rule whose output at each step depends
+only on globally aggregated per-agent statistics $B = \sum_{i \in V} b_i$,
+where $b_i$ is agent $i$'s local contribution. Suppose a coordinator
+receives the exact aggregate $B$ within $D$ rounds and broadcasts its
+decision within $D$ further rounds, with all agents synchronized via the
+depth signal carried on the broadcast. Then the coordinator's information
+state at every decision point is identical to that of a centralized
+instance of $\mathcal{A}$, with an additive overhead of at most $2D$ time
+steps per decision round.
+\end{theorem}
+
+\begin{proof}
+Fix any decision round $r$. By Proposition~\ref{prop:aggbcast} (uplink
+direction, with $x_i = b_i$), after $D$ rounds the hub holds $B =
+\sum_{i\in V} b_i$ exactly, not an approximation or a partial sum, since
+every node's contribution is included by the termination argument above.
+Because $\mathcal{A}$'s decision at round $r$ depends only on $B$, the hub
+computes exactly the action a centralized instance of $\mathcal{A}$ would
+compute given the same set of per-agent contributions.
+
+By Proposition~\ref{prop:aggbcast} (broadcast direction), within a further
+$D$ rounds every agent holds the hub's decision, and by the same mechanism
+every agent has derived its own depth $d_i$ from the hop count on this
+broadcast. The depth signal is carried on every downlink, so all agents can
+identify the round at which the current cycle ends, namely $2D$ rounds
+after the cycle's pull phase, and begin the next round's contribution
+simultaneously, regardless of their individual depth in $\mathcal{T}$.
+
+Across the whole run, the sequence of aggregates $B^{(1)}, B^{(2)},
+\ldots$ seen by the hub is therefore identical, round for round, to the
+sequence a centralized instance of $\mathcal{A}$ would see given the same
+sequence of per-agent local contributions, so the sequence of decisions is
+identical as well. The only difference from a literal centralized run is
+the $2D$ rounds of communication latency inserted between successive
+decisions: an additive overhead per round that does not alter the sequence
+of decisions itself.
+\end{proof}
+
+\section{The MERW Motivation for Eigenvector Centrality}
+\label{sec:merw}
+
+The main text motivates electing by eigenvector centrality through a Maximal
+Entropy Random Walk (MERW): the walk under which all paths of a given length
+between two fixed nodes are equally likely. We give the standard construction
+\citep{burda2009localization} and the identity the argument rests on, that
+MERW's stationary distribution is proportional to the squared eigenvector
+centrality, so its $\arg\max$ is the node EigenTree elects.
+
+\begin{sproposition}[MERW stationary distribution]
+\label{prop:merw}
+Let $G$ be connected and non-bipartite, with adjacency matrix $A$, leading
+eigenvalue $\lambda$, and positive unit leading eigenvector $\psi$. The
+transition matrix
+\[
+P_{ij} \;=\; \frac{A_{ij}}{\lambda}\,\frac{\psi_j}{\psi_i}
+\]
+is stochastic, assigns equal probability to all paths of equal length between
+any two fixed endpoints, and has stationary distribution $\pi_i = \psi_i^2$. In
+particular $\arg\max_i \pi_i = \arg\max_i \psi_i = h^\star$.
+\end{sproposition}
+
+\begin{proof}
+\emph{Stochastic.} Row $i$ sums to $\sum_j A_{ij}\psi_j/(\lambda\psi_i) =
+(A\psi)_i/(\lambda\psi_i) = \lambda\psi_i/(\lambda\psi_i) = 1$, using
+$A\psi=\lambda\psi$. Entries are nonnegative since $A\geq 0$ and $\psi>0$ by
+Perron--Frobenius.
+
+\emph{Equal path weights.} For a path $\gamma = (i_0, i_1, \ldots, i_L)$ with
+every consecutive pair adjacent, the product telescopes:
+\[
+\prod_{t=0}^{L-1} P_{i_t i_{t+1}}
+= \prod_{t=0}^{L-1} \frac{A_{i_t i_{t+1}}}{\lambda}\frac{\psi_{i_{t+1}}}{\psi_{i_t}}
+= \frac{1}{\lambda^{L}}\,\frac{\psi_{i_L}}{\psi_{i_0}},
+\]
+since each $A_{i_t i_{t+1}}=1$ along an admissible path. The result depends only
+on the endpoints $i_0, i_L$ and the length $L$, not on the route taken, so every
+admissible path of length $L$ between the same two nodes carries the same
+probability. This is the defining property the main text asks of the walk, and
+it is what makes the ensemble non-local: an ordinary random walk weights each
+step by $1/\deg$, giving longer weight to routes through low-degree nodes.
+
+\emph{Stationarity.} With $\pi_i = \psi_i^2$, which is a distribution since
+$\|\psi\|_2=1$,
+\begin{align*}
+\sum_i \pi_i P_{ij}
+&= \sum_i \psi_i^2 \frac{A_{ij}}{\lambda}\frac{\psi_j}{\psi_i}
+ = \frac{\psi_j}{\lambda}\sum_i A_{ij}\psi_i \\
+&= \frac{\psi_j}{\lambda}\,\lambda\psi_j
+ = \psi_j^2 = \pi_j,
+\end{align*}
+using the symmetry of $A$ and $A\psi=\lambda\psi$. Connected and non-bipartite
+makes $P$ irreducible and aperiodic, so this stationary distribution is unique.
+
+\emph{Argmax.} $t\mapsto t^2$ is strictly increasing on $t>0$ and $\psi>0$, so
+squaring does not move the maximizer.
+\end{proof}
+
+The hub is thus the node carrying the largest share of the long-path traffic
+under the ensemble in which no route is privileged, which is the sense in which
+it is the graph's natural coordinator. Note the election needs only the
+$\arg\max$, so the square is immaterial: agents compare $\tilde\psi_i$
+directly and never form $\pi$.
+
+\section{Cost of Not Using the Minimum Diameter Tree}
+\label{sec:mdst-gap}
+
+Throughout this section, $D = \mathrm{ecc}_G(h^\star)$ denotes the height
+of the EigenTree routing tree, equivalently the eccentricity of $h^\star$ in
+$G$. $D' = R(G) = \min_{v\in V}\mathrm{ecc}_G(v)$ denotes the radius of
+$G$: the height achieved by rooting a shortest-path tree at $G$'s absolute
+center, a minimum diameter spanning tree (MDST) \citep{hakimi1964,hassintamir1995}.
+
+We first record that the elected hub is never a low-degree node, which is what
+makes the pigeonhole hypothesis of Theorem~\ref{thm:mdst-gap} reachable: it
+asks $\deg(h^\star)$ to be large, and electing by centrality already forces
+$\deg(h^\star)\geq\lambda\geq\bar d$, the average degree.
+
+\begin{sproposition}[Hub degree lower bound]
+\label{prop:hubdeg}
+The hub's degree is at least the graph's spectral radius: $\deg(h^\star) \geq \lambda$.
+\end{sproposition}
+
+\begin{proof}
+$\tilde\psi$ is the (unnormalized) leading eigenvector of $A$ with
+eigenvalue $\lambda$, so it satisfies $A\tilde\psi = \lambda\tilde\psi$.
+Reading off the $h^\star$-th row of this equation,
+\[
+\lambda\tilde\psi_{h^\star} = \sum_{j \sim h^\star} \tilde\psi_j,
+\]
+where the sum ranges over the $\deg(h^\star)$ neighbors of $h^\star$ in
+$G$. $\tilde\psi_{h^\star} = \max_k \tilde\psi_k$ by definition of
+$h^\star$, so every term in the sum satisfies $\tilde\psi_j \leq
+\tilde\psi_{h^\star}$, giving
+\[
+\lambda\tilde\psi_{h^\star} = \sum_{j\sim h^\star}\tilde\psi_j \leq \deg(h^\star)\cdot\tilde\psi_{h^\star}.
+\]
+By the Perron--Frobenius theorem, the leading eigenvector of a connected
+graph's adjacency matrix is strictly positive, so $\tilde\psi_{h^\star} >
+0$. We divide both sides by $\tilde\psi_{h^\star}$ to obtain $\lambda \leq
+\deg(h^\star)$.
+\end{proof}
+
+\begin{stheorem}[Dense graphs: depth at most 2]
+\label{thm:mdst-gap}
+Let $\delta_{\bar N}(h^\star) = \min_{u \notin \mathcal{N}_G(h^\star)\cup\{h^\star\}} \deg(u)$ be the smallest degree among the nodes $h^\star$ is not directly connected to. If $\deg(h^\star) + \delta_{\bar N}(h^\star) \geq N$, then $D \leq 2$.
+\end{stheorem}
+
+\begin{proof}
+Let $u \in V$ be any node with $u \neq h^\star$ and $u \notin
+\mathcal{N}_G(h^\star)$: $u$ is not $h^\star$ itself and not a neighbor of
+$h^\star$. We show $d(h^\star, u) \leq 2$. Since $u$ was an arbitrary
+non-neighbor, and every neighbor of $h^\star$ trivially has
+$d(h^\star,\cdot)=1$, this establishes $D = \mathrm{ecc}_G(h^\star) \leq 2$.
+
+Consider $\mathcal{N}_G(h^\star)$ and $\mathcal{N}_G(u)$, the neighbor sets
+of $h^\star$ and $u$ respectively. Both are subsets of $V \setminus
+\{h^\star, u\}$. $h^\star \notin \mathcal{N}_G(h^\star)$ since there are no
+self-loops, and $u \notin \mathcal{N}_G(h^\star)$ by assumption.
+Symmetrically, $u \notin \mathcal{N}_G(u)$, and $h^\star \notin
+\mathcal{N}_G(u)$ since $u \notin \mathcal{N}_G(h^\star)$ implies $h^\star
+\notin \mathcal{N}_G(u)$ on an undirected graph. Hence
+\begin{align*}
+|\mathcal{N}_G(h^\star)| + |\mathcal{N}_G(u)| &= \deg(h^\star) + \deg(u) \\
+&\geq \deg(h^\star) + \delta_{\bar N}(h^\star) \geq N,
+\end{align*}
+using $\deg(u) \geq \delta_{\bar N}(h^\star)$, since $u$ is by construction
+one of the nodes over which $\delta_{\bar N}(h^\star)$ is minimized, and
+the theorem's hypothesis.
+
+$|V \setminus \{h^\star, u\}| = N - 2$, and both $\mathcal{N}_G(h^\star)$
+and $\mathcal{N}_G(u)$ are subsets of this $(N-2)$-element set. Their sizes
+sum to at least $N > N-2$, so they cannot be disjoint: this is a standard
+pigeonhole argument, since $|X|+|Y| > |Z|$ for $X,Y\subseteq Z$ forces
+$X\cap Y\neq\emptyset$, as otherwise $|X\cup Y| = |X|+|Y| > |Z|$ would
+contradict $X\cup Y\subseteq Z$. So there exists $w \in
+\mathcal{N}_G(h^\star)\cap\mathcal{N}_G(u)$, giving a length-2 path
+$h^\star - w - u$, hence $d(h^\star,u)\leq 2$.
+\end{proof}
+
+Theorem~\ref{thm:mdst-gap} covers the dense case, where the hub reaches
+everything in two hops. It says nothing about sparse expanders, which have
+bounded degree, so no node reaches the whole graph in two hops and the
+pigeonhole argument does not apply. There the gap is small for the opposite
+reason: the MDST is itself deep, so a suboptimal root cannot lose much.
+
+\begin{sproposition}[Sparse expanders: the MDST is logarithmically deep]
+\label{prop:mdst-sparse}
+If $G$ is in the expander regime of Definition~\ref{def:expander}, then $D' =
+R(G) = \Theta(\log N)$, and consequently $D \leq 2D' = \Theta(\log N)$: even
+the optimal root gives a logarithmically deep tree, and the elected hub is
+within a factor $2$ of it.
+\end{sproposition}
+
+\begin{proof}
+\emph{Upper bound.} A $\lambda_2$ bounded below by a constant forces
+$\mathrm{diam}(G) = O(\log N)$ \citep{mohar1991}, and $R(G)\leq
+\mathrm{diam}(G)$ always, so $D' = O(\log N)$.
+
+\emph{Lower bound.} On any graph $\mathrm{diam}(G)\leq 2R(G)$: for any $u,w$
+and a center $z$ achieving the radius, $d(u,w)\leq d(u,z)+d(z,w)\leq 2R(G)$ by
+the triangle inequality. Hence $D'=R(G)\geq \mathrm{diam}(G)/2$. In the
+expander regime the graph is connected with degrees bounded by $N-1$, and a
+graph of maximum degree $\Delta$ has $\mathrm{diam}(G) = \Omega(\log_\Delta
+N)$, since a ball of radius $r$ holds at most $1+\Delta\frac{(\Delta-1)^r -
+1}{\Delta - 2}$ nodes and must cover all $N$. For bounded-degree expanders,
+random regular graphs or ER just above the connectivity threshold, $\Delta =
+O(1)$ or $O(\log N)$, giving $\mathrm{diam}(G) = \Omega(\log N /\log\log N)$
+and so $D' = \Omega(\log N/\log\log N)$. Combined with the upper bound, $D'$ is
+logarithmic up to the $\log\log$ factor, and exactly $\Theta(\log N)$ when
+$\Delta = O(1)$.
+
+\emph{Consequence.} $D = \mathrm{ecc}_G(h^\star) \leq \mathrm{diam}(G) \leq
+2R(G) = 2D'$ for any root whatsoever, in particular $h^\star$. So the elected
+hub never pays more than twice the optimal depth, and both are
+$\Theta(\log N)$.
+\end{proof}
+
+The regime where the choice of root is genuinely expensive is the one
+Definition~\ref{def:expander} excludes. On a path, $\lambda_2 = \Theta(N^{-2})$
+and $\mathrm{diam}(G) = \Theta(N)$, so the factor-$2$ bound above is still
+true but both quantities are linear in $N$.
+
+\section{Instantiations: Regret and Best Arm Identification}
+
+\begin{corollary}[Regret matches centralized UCB]
+\label{cor:regret}
+Under the EigenTree relay protocol, the leading term of the expected group
+cumulative regret matches a centralized UCB agent on $P$ total pulls, with
+$P = \Theta(NT/(2D+1))$.
+\end{corollary}
+
+\begin{proof}
+Instantiate Theorem~\ref{thm:coordinator} with $b_i$ as agent $i$'s new
+per-arm pull counts and reward sums since the last cycle. The hub's
+aggregate state $(\hat n^k, \hat s^k)$ for each arm $k$, together with the
+total-pull count $P$, is then identical at every decision point to the
+state a centralized UCB agent would hold after observing the same pulls.
+$P$ itself is maintained exactly: the hub increments it by the number of
+uplink contributions received plus its own pull each cycle, which by
+Proposition~\ref{prop:aggbcast} is exactly the number of new pulls made
+network-wide since the last decision. The standard UCB regret bound is a
+function only of $(\hat n^k,\hat s^k,P)$ evaluated at the algorithm's own
+internal clock $P$, not wall-clock time, and this sequence of internal
+states is identical between the relay protocol and a literal centralized
+run. So the leading-order regret term is identical as a function of $P$.
+
+The relationship between $P$ and wall-clock horizon $T$ follows from the
+fixed cycle structure. Each cycle lasts $2D+1$ rounds: one simultaneous
+pull round, $D$ uplink rounds, one hub-decision round, $D$ downlink
+rounds. Every cycle contributes exactly $N$ new pulls, one per agent, to
+$P$. Over horizon $T$, the number of completed cycles is
+$\Theta(T/(2D+1))$, so $P = \Theta(NT/(2D+1))$.
+\end{proof}
+
+\begin{corollary}[BAI sample complexity matches centralized BAI]
+\label{cor:bai}
+The total number of arm pulls required by EigenTree-BAI to identify $a^\star$ with probability $\geq 1-\delta$ matches the centralized algorithm of \citet{hillel2013distributed}; the only overhead is $2D+1$ extra time steps per elimination round.
+\end{corollary}
+
+\begin{proof}
+EigenTree-BAI uses exactly Hillel's Algorithm 3 pull schedule $L_r = \lceil t_r
+- t_{r-1}\rceil$ and elimination rule, eliminate arms with estimated mean
+below the round-$r$ threshold $\epsilon_r$, applied to the hub's aggregate
+statistics rather than an all-to-all broadcast. Instantiate
+Theorem~\ref{thm:coordinator} with $b_i$ as agent $i$'s per-arm sums over
+the current surviving arm set $S_{r-1}$. The hub's aggregate after each
+round's uplink is then exactly the sum of pulls Hillel's centralized
+algorithm would have observed given the same schedule and elimination
+history, since every agent executes the identical, schedule-determined
+number of pulls $L_r$ per round. The schedule depends only on
+$N,K,\delta,r$, all known in advance, so no agent needs to learn anything
+to determine its own pull count. The elimination decision depends only on
+this aggregate, so the sequence of surviving sets $S_1 \supseteq S_2
+\supseteq \cdots$ produced by EigenTree-BAI is identical to Hillel's, round for
+round, and the total number of pulls until $|S_r|=1$ is identical.
+
+The only addition is communication. Each round $r$ requires $D$ uplink
+rounds to deliver the round's local sums to the hub, one round for the hub
+to apply the elimination rule, and $D$ downlink rounds to broadcast the
+surviving set $S_r$ and the depth signal: $2D+1$ rounds of overhead per
+elimination round beyond the $L_r$ pull rounds themselves.
+\end{proof}
+
+\section{Fault Tolerance}
+\label{sec:ft}
+
+Throughout this section, $\mathcal{T}$, $D$, $\mathrm{par}(\cdot)$,
+$\mathrm{ch}(\cdot)$, $d_i$ refer to the routing tree and its structure
+\emph{before} the failure under discussion. A subscript or prime denotes
+the corresponding quantity afterward, as introduced at each result.
+
+Re-election needs the graph to survive the failure. This is supplied by the
+expander regime of Definition~\ref{def:expander}, not assumed separately:
+$\kappa(G)\geq\lambda_2$ \citep{fiedler1973} bounds the vertex connectivity
+below by the algebraic connectivity, so a $\lambda_2$ bounded away from $0$ by a
+constant $c>0$ gives $\kappa(G)\geq c$, and for $N$ large enough that $c>1$ the
+graph stays connected after any single node is removed. The one condition of
+Definition~\ref{def:expander} therefore makes re-election both possible, since
+$G\setminus\{v\}$ is connected, and cheap, since the same $\lambda_2$ sets the
+contraction rate.
+
+\subsection{Re-Election}
+
+Deleting node $v$ from $A$ gives $\tilde A = A + E$ with
+$E = -(A e_v e_v^\top + e_v e_v^\top A)$. As $A$ has no self-loops, $E$ has rank
+at most $2$ and $\|E\|_2 = \|A e_v\|_2 = \sqrt{\deg(v)}$, since $A e_v$ is the
+$v$-th column of $A$, a $0/1$ vector with $\deg(v)$ ones. This holds for any $v$;
+the hub is only the case of largest $\deg(v)$.
+
+\begin{proposition}[Warm-started re-election]
+\label{prop:reelection}
+After any single node failure, the warm-started power iteration on $\tilde A$ converges to the leading eigenvector of $\tilde A$ from the pre-failure $\tilde\psi$. After the fixed budget $\tau_{\mathrm{init}} = O(\log N)$, the residual angle is at most $(\lambda_2/\lambda_1)^{\tau_{\mathrm{init}}}\cdot\sqrt{\deg(v)}/\gamma$, where $\gamma$ is the eigenvalue gap of $\tilde A$, against $(\lambda_2/\lambda_1)^{\tau_{\mathrm{init}}}\cdot\Theta(1)$ for a cold start from uniform. The warm start is therefore never worse, and its advantage is a factor $\gamma/\sqrt{\deg(v)}$, largest when the failed node has low degree.
+\end{proposition}
+
+\begin{proof}
+After $v$ goes silent, a surviving node's update
+$\tilde w_i = \sum_{j\sim i} w_j$ no longer includes the dead neighbor, so the
+operator applied each round is exactly $\tilde A$ on the live nodes. Since $G$ is
+in the expander regime, $G\setminus\{v\}$ is connected by the argument above, so
+$\tilde A$ is irreducible and has
+a unique positive leading eigenvector $\tilde\psi_{\tilde A}$ by
+Perron--Frobenius, and power iteration converges to it from any start with
+nonzero overlap; the warm start $\tilde\psi$ qualifies, as both vectors are
+strictly positive.
+
+For the accuracy, the initial angle to the target is bounded by Davis--Kahan
+\citep{daviskahan1970},
+$\sin\Theta(\tilde\psi,\tilde\psi_{\tilde A}) \leq \|E\|_2/\gamma
+= \sqrt{\deg(v)}/\gamma$, using $\|E\|_2 = \sqrt{\deg(v)}$ for the rank-2
+perturbation $E$ deleting row and column $v$. Each power-iteration round
+multiplies the component orthogonal to $\tilde\psi_{\tilde A}$ by at most
+$\lambda_2/\lambda_1$ relative to the leading one, so the residual angle after
+$t$ rounds is at most $(\lambda_2/\lambda_1)^t\tan\Theta$.
+
+The survivors run the fixed budget $t = \tau_{\mathrm{init}} = O(\log N)$
+rather than a tolerance-driven number of rounds. This is forced: a budget
+derived from the bound above would require $\deg(v)$, which only $v$'s
+neighbors know and which $v$ cannot report once dead, and $\gamma$, a spectral
+quantity of $\tilde A$ that no node holds. Every node can compute
+$\tau_{\mathrm{init}}$ from $N$ alone, so all survivors finish on the same
+round, exactly as at initialization.
+
+Substituting $t = \tau_{\mathrm{init}}$ and the two initial angles gives the
+claim: the warm start begins at $\tan\Theta \leq \sqrt{\deg(v)}/\gamma$, while
+a cold start from the uniform vector begins at $\tan\Theta = \Theta(1)$, having
+no dependence on the failure. Both contract at the same rate over the same
+budget, so the warm start's residual is smaller by the factor
+$\gamma/\sqrt{\deg(v)}$, and it is never worse. The advantage is largest when
+$\deg(v)$ is small; when $\deg(v) = \Theta(N)$ it narrows to
+$\gamma/\sqrt{N}$, since $\deg(v) \leq N$ always.
+\end{proof}
+
+\begin{remark}
+\label{rem:gamma}
+The bound treats $\gamma$, the eigenvalue gap of the \emph{perturbed} matrix
+$\tilde A$, as $\Omega(1)$ in the expander regime. This is a property of
+$\tilde A$, not of $A$, so it requires the gap to survive the failure. Since
+$E$ has rank at most $2$, Weyl's inequality moves each eigenvalue of $A$ by at
+most $\|E\|_2 = \sqrt{\deg(v)}$, which bounds the perturbed gap in terms of the
+original one but does not by itself keep it away from $0$ when $\deg(v)$ is
+large. A failure-independent lower bound on $\gamma$ is left for future work.
+\end{remark}
+
+\subsection{Detection and Synchronous Restart}
+\label{sec:ft-detect}
+
+Before the survivors can re-elect they must detect the failure and enter the new
+power iteration in step, with no coordinator and no synchronized clocks. Both
+follow from the routing tree already in place. Every node learned its depth $d_i$
+and the height $D$ from the first downlink, where depth is the hop count that
+message carried, and every ordinary cycle is one uplink-and-downlink traversal of
+length $2D+1$ hops. Each node therefore knows, for each of its tree neighbors, the
+exact hop of the cycle at which that neighbor's message is due, and runs a single
+uniform timer $\tau = 2D+1$ hops against that schedule, suspecting a neighbor dead
+when its due message fails to arrive within $\tau$. The rule is identical for
+every node, and no node is a distinguished detector: the hub is detected by its
+children exactly as any node is detected by its parent.
+
+\begin{proposition}[Failure horizon]
+\label{prop:horizon}
+Under the uniform timer $\tau = 2D+1$, after any single node failure every surviving node receives the failure notice within $2D$ hops of the earliest detection.
+\end{proposition}
+
+\begin{proof}
+Removing $v$ severs $\mathcal{T}$ into components: the component above $v$ (still
+containing every node not below $v$) and one component per child
+$c\in\mathrm{ch}(v)$, since every tree path between two of these components ran
+through $v$. No survivor can flood all of them over tree edges, because the paths
+between components are exactly the ones that passed through $v$; instead each
+component has its own first detector, the parent $\mathrm{par}(v)$ for the upper
+component and the child $c$ for each lower one, and each detector floods the
+notice over the intact tree edges of its own component only.
+
+Two quantities bound the horizon. First, the detectors do not fire
+simultaneously: a detector at depth $d$ expects the failed node's message at hop
+$d$ (uplink) or hop $2D-d$ (downlink) of the cycle, so two detectors' firing
+times differ by their difference in these expected hops, which is at most the
+depth spread $D$. Since all detectors use the same $\tau$ measured against the
+same round-1 schedule, the last detector fires at most $D$ hops after the first.
+Second, within a component the notice floods over tree edges from the detector,
+reaching the farthest node in at most the component's height, itself at most $D$
+hops. Adding the two, the last node to hear does so at most $D + D = 2D$ hops
+after the earliest detection.
+\end{proof}
+
+The same $2D$ budget makes the restart synchronous. The notice is flooded
+carrying the downlink's hop counter, so a node that receives it $h$ hops from its
+detector knows that $h$ of the $2D$ hops have elapsed and waits the remaining
+$2D-h$ hops before taking its first power-iteration step. Every node's
+$(\text{hops travelled}) + (\text{hops waited}) = 2D$, so all survivors take
+their first step at the same instant, measured from the earliest detection, with
+no clock agreement. The wait is read directly off the hop counter, which is the
+node's depth $d_i$ up to the fixed offset it always was, so the depth each node
+already holds serves three roles at once, the detection deadline through $\tau$,
+the bound on detector skew, and the restart countdown, and no field is added to
+any message.
+
+\subsection{Cost of a Recovery}
+\label{sec:recovery-cost}
+
+The main text reports recovery times measured from the failure injection to
+the round at which ordinary cycling resumes. That total decomposes into four
+stages, each already established above, and the decomposition is what those
+measurements are checked against.
+
+\begin{sproposition}[Recovery cost]
+\label{prop:recovery-cost}
+After a single node failure, the survivors resume ordinary cycling within
+\[
+\underbrace{(2D+1)}_{\text{detection}} \;+\; \underbrace{2D}_{\text{notice}}
+\;+\; \underbrace{\tau_{\mathrm{init}}}_{\text{re-election}}
+\;+\; \underbrace{2D_{\mathrm{new}}}_{\text{rebuild}}
+\]
+rounds of the failure, where $D$ is the height of the pre-failure tree,
+$D_{\mathrm{new}}$ that of the rebuilt one, and $\tau_{\mathrm{init}} =
+O(\log N)$.
+\end{sproposition}
+
+\begin{proof}
+The four stages run in sequence, so their costs add.
+
+\emph{Detection.} Each node times its tree neighbors against the cycle
+schedule with the uniform timer $\tau = 2D+1$ of Section~\ref{sec:ft-detect}.
+A node whose expected message misses that window is suspected dead, so the
+first detector fires at most $2D+1$ rounds after the failure.
+
+\emph{Notice.} By Proposition~\ref{prop:horizon}, every survivor holds the
+notice within $2D$ hops of the earliest detection, and the hop counter carried
+on the notice makes them all take their first iteration step on the same round.
+
+\emph{Re-election.} The survivors run the warm-started power iteration of
+Proposition~\ref{prop:reelection} for the fixed budget $\tau_{\mathrm{init}} =
+O(\log N)$, computed from $N$ alone, so they finish together.
+
+\emph{Rebuild.} Max-flooding over $G\setminus\{v\}$ re-roots the tree at the
+new argmax exactly as at initialization. The first ordinary cycle is one
+uplink-and-downlink traversal of the rebuilt tree, so $2D_{\mathrm{new}}$
+rounds pass before the new height is known and cycling is back in step.
+
+Summing the four gives the claim. Only $\tau_{\mathrm{init}}$ is spectral;
+the other three scale with tree height, which is why a recovery costs more
+when the hub moves to a node of larger eccentricity.
+\end{proof}
+
+\section{Additional Experiments}
+\label{sec:exp}
+
+The main text evaluates EigenTree on Erd\H{o}s--R\'{e}nyi graphs, the setting
+its analysis targets: above the connectivity threshold an ER graph is an
+expander with high probability, so it lies in the regime of
+Definition~\ref{def:expander} where the costs are stated. Nothing in the
+protocol is specific to that model, so this section repeats both
+instantiations on three further topologies: Barab\'{a}si--Albert, a $2$D grid,
+and a barbell. Together they vary degree distribution, diameter, and the
+sharpness of the centrality peak.
+
+\subsection{The Elected Hub and Routing Tree}
+\label{sec:exp-trees}
+
+Figures~\ref{fig:tree-er}--\ref{fig:tree-barbell} show what the election
+produces on each of the four graphs. The left panel colours every node by its
+eigenvector centrality $\psi_i/\psi_{\max}$, the middle panel overlays the
+routing tree on the graph, and the right panel redraws that tree as a
+hierarchy with every arrow pointing from a child to its parent, so the whole
+structure funnels into the hub.
+
+The four cases differ in how sharply the centrality peaks. On the
+Barab\'{a}si--Albert graph one high-degree node dominates and the tree is
+shallow and wide, most nodes attaching to the hub directly. The grid is
+near-regular, so the centrality is spread almost evenly, the hub sits at the
+centre of the lattice, and the tree is correspondingly deep. The barbell
+splits the mass between the two clique-bridge endpoints; the hub is one of
+them and reaches the far clique through the other, which is why its depth is
+$2$ rather than the $3$ its diameter would suggest. The
+Erd\H{o}s--R\'{e}nyi graph sits between these, with a mild peak and a
+two-hop tree.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_er_N20_p0.5.pdf}
+    \caption{Centrality and routing tree on an Erd\H{o}s--R\'{e}nyi graph
+    ($N=20$, $p=0.5$).}
+    \label{fig:tree-er}
+\end{figure*}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_ba_N20.pdf}
+    \caption{Centrality and routing tree on a Barab\'{a}si--Albert graph
+    ($N=20$, $m=2$). The centrality concentrates on one high-degree node, so
+    the tree is shallow and wide.}
+    \label{fig:tree-ba}
+\end{figure*}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_grid_N25.pdf}
+    \caption{Centrality and routing tree on a $5\times5$ grid. The graph is
+    near-regular, so the centrality is nearly flat and the elected hub sits at
+    the centre of the lattice.}
+    \label{fig:tree-grid}
+\end{figure*}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_barbell_N20.pdf}
+    \caption{Centrality and routing tree on a barbell graph ($N=20$). The hub
+    is one of the two bridge endpoints and reaches the far clique through the
+    other, giving depth $2$ on a graph of diameter $3$.}
+    \label{fig:tree-barbell}
+\end{figure*}
+
+\subsection{Best Arm Identification Across Topologies}
+\label{sec:exp-bai}
+
+Corollary~\ref{cor:bai} predicts that EigenTree-BAI needs exactly as many arm
+pulls as the centralized algorithm of \citet{hillel2013distributed} on any
+graph where the tree spans the network: the hub's aggregate is exact by
+Proposition~\ref{prop:aggbcast}, and the elimination schedule $L_r$ depends
+only on $N,K,\delta,r$. The topology enters through $D$ alone, which is a cost
+in time steps, not in samples.
+
+Figure~\ref{fig:bai-topologies} bears this out. The two algorithms draw
+independent reward streams, so the comparison is an ordinary two-sample one;
+their means differ by $8.9\%$ on average and at most $0.29$ standard errors at
+any size, well inside the run-to-run spread. A fixed-confidence stopping time
+is itself highly variable, with a coefficient of variation near $0.7$ here, so
+differences of this size are noise rather than a cost of routing. The first
+three panels coincide because at fixed $N$ the pull count is a function of the
+elimination schedule and the rewards drawn, and neither knows the graph; the
+grid differs only because it is sized by its side length and so realizes
+$\lfloor\sqrt N\rfloor^2$ agents rather than $N$.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{results/supplementary/bai_topologies.pdf}
+    \caption{Total arm pulls to identify the best arm, EigenTree-BAI against
+    the centralized reference \citep{hillel2013distributed}, on four
+    topologies ($K=10$, $\delta=0.05$, 50 runs per $N$). The two draw
+    independent reward streams; error bars are the standard deviation across
+    runs. Their means differ by $8.9\%$ on average and at most $0.29$ standard
+    errors at any size, so the curves are indistinguishable given how variable
+    a fixed-confidence stopping time is. The first three panels coincide
+    because at fixed $N$ the pull count is a function of the elimination
+    schedule and the rewards drawn, and neither knows the graph; the grid
+    differs only because it realizes $\lfloor\sqrt N\rfloor^2$ agents. This is
+    what Corollary~\ref{cor:bai} predicts: the tree costs communication,
+    $2D+1$ rounds per elimination round, rather than samples.}
+    \label{fig:bai-topologies}
+\end{figure*}
+
+\subsection{Regret Minimization Across Topologies}
+\label{sec:exp-regret}
+
+Corollary~\ref{cor:regret} ties EigenTree-UCB's regret to a centralized UCB
+agent run on $P$ total pulls, with $P = \Theta(NT/(2D+1))$. The topology again
+enters only through $D$, so the prediction is that regret tracks the
+centralized baseline as a function of pulls, while the number of pulls fitting
+into a fixed horizon falls as the tree deepens.
+
+Figure~\ref{fig:regret-topologies} therefore plots regret against total pulls
+rather than against the round. The distinction matters: a cycle costs $2D+1$
+rounds, so a deeper tree completes fewer cycles and makes fewer pulls in the
+same $T$, and its cumulative regret at $T$ would read lower merely because it
+has played less. Drawing every curve out to the largest budget all three
+algorithms reach removes that confound.
+
+On that footing the result is uniform. The EigenTree-UCB and Central-UCB
+curves lie on top of each other on every topology, within bands that overlap
+throughout, so the two are indistinguishable at this sample size rather than
+one edging the other. Coop-UCB2 sits clearly above both everywhere.
+
+Its grid curve stands out by two orders of magnitude, which is why that panel
+is drawn on a logarithmic ordinate. A small spectral gap alone does not
+account for it, since the barbell's $\lambda_2$ is smaller still ($0.039$
+against the grid's $0.098$ at $N=100$) and its Coop-UCB2 regret is an order of
+magnitude lower; what separates the grid is that low degree and large diameter
+apply together, so the doubly stochastic weights both move little mass per
+round and must move it far. EigenTree is insensitive to either, since
+Proposition~\ref{prop:aggbcast} delivers the exact aggregate in $D$ hops
+however slowly the graph mixes, and that insensitivity is the practical case
+for routing over a tree instead of averaging over the graph. The price
+EigenTree pays is visible in how far each panel extends along the pull axis,
+which shrinks as $D$ grows.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{results/supplementary/regret_topologies.pdf}
+    \caption{Group cumulative regret against total arm pulls on four
+    topologies ($N=100$, $K=5$, $T=5000$, 50 runs); bands are the standard
+    deviation across runs. Plotting against pulls rather than rounds compares
+    the algorithms on equal samples, which keeps the depth cost in time where
+    Corollary~\ref{cor:regret} puts it: a cycle costs $2D+1$ rounds, so a
+    deeper tree simply reaches fewer pulls within the horizon. EigenTree-UCB
+    tracks Central-UCB on every topology, while Coop-UCB2 is worse throughout.
+    The grid panel uses a logarithmic ordinate, since Coop-UCB2 runs two
+    orders of magnitude above the other two there.}
+    \label{fig:regret-topologies}
+\end{figure*}
+
+\section{Reproducibility}
+\label{sec:reproducibility}
+
+\paragraph{Computing infrastructure.} All experiments run on CPU only, on an
+Apple M1 Pro with 16\,GB of RAM under macOS~26.5. The code is pure Python and
+uses no GPU.
+
+\paragraph{Software.} Python~3.12 with NumPy~2.4, NetworkX~3.6, and
+Matplotlib~3.10; no other third-party libraries are required. The three scripts
+in the code archive (\texttt{regret\_min.py}, \texttt{best\_arm\_id.py},
+\texttt{fault\_tolerance.py}) are self-contained and share no imports. Each
+takes a \texttt{--graph} argument selecting the topology, so every table in
+Section~\ref{sec:exp} is reproduced by rerunning the corresponding script once
+per topology.
+
+\paragraph{Randomness and seeds.} Every experiment is fully deterministic given
+its seed. A master \texttt{RandomState} seeded at a fixed value derives one graph
+seed, held constant across all runs so every algorithm is compared on the same
+graph, and one independent per-run seed; each run reseeds the generator from its
+per-run seed before drawing rewards. Graph generation, arm means, and reward
+draws all flow from these seeds, so rerunning a script reproduces the reported
+curves exactly.
+
+Gossip partner selection during the power iteration draws from a generator of
+its own, separate from the one supplying rewards. This matters for the
+like-for-like comparisons: electing the hub consumes randomness, so drawing
+gossip partners from the reward stream would leave the protocol and its
+baseline reading different rewards from the same seed, and they would then
+diverge through an artifact of the simulation rather than through anything the
+protocol does.
+
+In the BAI comparison each algorithm additionally draws its own reward stream.
+Sharing one would couple them exactly: both request the same arms in the same
+order, so they would receive identical rewards, eliminate identically, and
+report the same pull count with zero variance in the difference. That is a
+valid check that routing loses no information, but it is not a measurement of
+sample complexity, since the agreement would hold by construction rather than
+be observed. Independent streams make Figure~\ref{fig:bai-topologies} an
+ordinary two-sample comparison.
+
+\paragraph{Parameters.} The main-text experiments use the settings stated
+there: for regret minimization, $N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs; for
+best arm identification, $K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N \in
+\{10,20,30,40,50\}$; for fault tolerance, $N=20$, $p=0.5$, $K=10$, $T=2000$,
+with the hub killed at $t=500,1000,1500$. The UCB exploration constant is $c=2$
+and the sub-Gaussian parameter is $\sigma=1$. Reported quantities are means over
+the runs, with standard error of the mean shown as shaded bands or error bars.
+
+The topology sweeps of Section~\ref{sec:exp} reuse these settings and vary only
+the graph. Grid graphs are built with side $\lfloor\sqrt N\rfloor$, so their
+realized agent count is read off the generated graph rather than the requested
+$N$; both the protocol and its baseline are given that same count, so the
+comparison stays like-for-like.
+
+\bibliography{references}
+
+\end{document}

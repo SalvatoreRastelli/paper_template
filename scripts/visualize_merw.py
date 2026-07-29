@@ -37,11 +37,11 @@ import matplotlib.colors as mcolors
 from pathlib import Path
 plt.style.use(Path(__file__).resolve().parent / "merw.mplstyle")
 
-RESULTS_DIR  = Path(__file__).resolve().parent.parent / "paper" / "results"
+RESULTS_DIR  = Path(__file__).resolve().parent.parent / "results"
 MERW_VIZ_DIR = RESULTS_DIR / "MERW_visualization"
 MERW_VIZ_DIR.mkdir(parents=True, exist_ok=True)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "paper" / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 BG          = "#fafaf8"   # warm off-white background
@@ -559,10 +559,20 @@ def save_merw_csv(data, G, p=None):
     with open(_edges_csv_path(graph_type, N, p), "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["src", "dst", "is_tree_edge"])
+        # Tree edges are written parent-first, the orientation load_merw_data
+        # and draw_tree_edges_directed both assume. G.edges() yields each
+        # undirected pair in its own order (typically ascending node id), so
+        # emitting u,v as they come silently reverses every tree edge whose
+        # child has the smaller id, and the arrows for those are then drawn
+        # pointing away from the hub.
         tree_edge_set = {tuple(e) for e in data["tree_edges"]}
         for u, v in G.edges():
-            is_tree = (u, v) in tree_edge_set or (v, u) in tree_edge_set
-            writer.writerow([u, v, int(is_tree)])
+            if (u, v) in tree_edge_set:
+                writer.writerow([u, v, 1])
+            elif (v, u) in tree_edge_set:
+                writer.writerow([v, u, 1])
+            else:
+                writer.writerow([u, v, 0])
 
     print(f"  Saved {_meta_csv_path(graph_type, N, p)}, "
           f"{_nodes_csv_path(graph_type, N, p)}, {_edges_csv_path(graph_type, N, p)}")
@@ -676,7 +686,6 @@ def plot_merw(data, G, p=None):
 
     # ── panel 3: directed hierarchical layout, same subtree colors ────────
     ax = axes[2]
-    ax.invert_yaxis()
 
     draw_tree_edges_directed(ax, pos_tree, tree_edges, subtree_of, hub_cmap)
     nx.draw_networkx_nodes(G, pos_tree, node_color=s_colors,
@@ -703,6 +712,14 @@ def plot_merw(data, G, p=None):
             x_min = min(pos_tree[i][0] for i in pos_tree) - 1.2
             ax.text(x_min, y, f"depth {d}", fontsize=8,
                     color="#555555", va="center", ha="right")
+
+    # Invert only once every artist is in place. pos_tree puts the hub at y=0
+    # and increases y with depth, so the axis has to be flipped to draw the
+    # root at the top. Doing it before drawing does not survive: each
+    # draw_networkx_* call autoscales the (still empty) axes, which recomputes
+    # the limits in ascending order and silently undoes the inversion, leaving
+    # the arrows pointing away from the hub.
+    ax.invert_yaxis()
 
     hub_label = f"hub(s) = {{{hub_str}}}" if len(hubs) > 1 else f"hub = node {hub}"
     ax.set_title(f"Induced directed graph (hierarchical layout)\n{hub_label}  ·  arrows: child → parent",

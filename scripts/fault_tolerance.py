@@ -41,11 +41,11 @@ import numpy as np
 import networkx as nx
 warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
 
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "paper" / "results"
+RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 FT_DIR      = RESULTS_DIR / "FaultTolerance"
 FT_DIR.mkdir(parents=True, exist_ok=True)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "paper" / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
