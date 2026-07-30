@@ -30,6 +30,12 @@ jobs:
       # installs only what the two documents load and caches the result.
       # The engine stays pdfTeX: aaai2027.sty asserts \RequirePDFTeX, so
       # XeTeX/LuaTeX-only toolchains cannot build this paper.
+      # The last four packages are Matplotlib's, not the paper's: every figure
+      # is rendered through LaTeX (text.usetex in scripts/merw.mplstyle), which
+      # needs cm-super, type1cm and dvipng. Keep comments out of the `packages`
+      # value below -- the folded scalar joins it into one line, and the action
+      # treats everything after a `#` as a comment to the end of that line,
+      # which silently discards every package following it.
       - name: Install TeX Live
         uses: TeX-Live/setup-texlive-action@v4
         with:
@@ -53,6 +59,10 @@ jobs:
             graphics
             url
             xspace
+            cm-super
+            type1cm
+            dvipng
+            underscore
 
       - name: Build paper
         run: make
