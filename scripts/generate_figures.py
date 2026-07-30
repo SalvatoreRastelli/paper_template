@@ -108,6 +108,13 @@ def generate(mode):
          "--K", "10", "--T", "2000", "--fail-at", "500", "1000", "1500",
          "--seed", "2", "--mode", mode])
 
+    # Supplementary topology figures. Unlike the scripts above this one only
+    # reads the CSVs the regret/BAI sweeps already wrote, so it has no
+    # compute step of its own and is skipped when only computing. It must run
+    # after those sweeps, since it consumes their output.
+    if mode != "compute":
+        run([PYTHON, "supplementary_figures.py"])
+
 
 def main():
     p = argparse.ArgumentParser()

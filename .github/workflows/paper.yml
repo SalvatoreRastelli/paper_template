@@ -25,17 +25,34 @@ jobs:
       - name: Install Python dependencies
         run: uv sync
 
-      - name: Install LaTeX
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            latexmk \
-            texlive-latex-extra \
-            texlive-fonts-recommended \
-            texlive-fonts-extra \
-            texlive-science \
-            cm-super \
-            dvipng
+      # TeX Live from tlmgr rather than the distro packages. The apt route
+      # pulled ~2GB of texlive-*-extra to get a handful of packages; this
+      # installs only what the two documents load and caches the result.
+      # The engine stays pdfTeX: aaai2027.sty asserts \RequirePDFTeX, so
+      # XeTeX/LuaTeX-only toolchains cannot build this paper.
+      - name: Install TeX Live
+        uses: TeX-Live/setup-texlive-action@v4
+        with:
+          packages: >-
+            scheme-basic
+            latexmk
+            newtx
+            helvetic
+            courier
+            iftex
+            placeins
+            xcolor
+            algorithms
+            amsmath
+            amsfonts
+            booktabs
+            tabularx
+            ragged2e
+            natbib
+            caption
+            graphics
+            url
+            xspace
 
       - name: Build paper
         run: make
@@ -46,4 +63,4 @@ jobs:
           name: paper-pdf
           path: |
             paper/aaai/main.pdf
-            paper/arxiv/main.pdf
+            paper/supplementary/supplementary.pdf
