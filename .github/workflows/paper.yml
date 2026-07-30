@@ -25,39 +25,38 @@ jobs:
       - name: Install Python dependencies
         run: uv sync
 
-      # TeX Live from tlmgr rather than the distro packages. The apt route
-      # pulled ~2GB of texlive-*-extra to get a handful of packages; this
-      # installs only what the two documents load and caches the result.
-      # The engine stays pdfTeX: aaai2027.sty asserts \RequirePDFTeX, so
-      # XeTeX/LuaTeX-only toolchains cannot build this paper.
-      # The last four packages are Matplotlib's, not the paper's: every figure
-      # is rendered through LaTeX (text.usetex in scripts/merw.mplstyle), which
-      # needs cm-super, type1cm and dvipng. Keep comments out of the `packages`
-      # value below -- the folded scalar joins it into one line, and the action
-      # treats everything after a `#` as a comment to the end of that line,
-      # which silently discards every package following it.
+      # TeX Live from tlmgr rather than the distro packages, which pulled ~2GB
+      # of texlive-*-extra to get a handful of files. The engine stays pdfTeX:
+      # aaai2027.sty asserts \RequirePDFTeX, so a XeTeX/LuaTeX-only toolchain
+      # cannot build this paper.
+      #
+      # The two collections cover the documents and their transitive
+      # dependencies. Listing leaf packages instead is a trap: newtx pulls
+      # xpatch, fontaxes and xstring, none of which appear in any \usepackage
+      # line, so a hand-built list fails on the first one it missed.
+      # The four trailing packages are Matplotlib's rather than the paper's,
+      # since every figure is rendered through LaTeX (text.usetex in
+      # scripts/merw.mplstyle).
+      #
+      # Keep comments out of the `packages` value below: the folded scalar
+      # joins it into a single line and the action treats everything after a
+      # `#` as a comment to the end of that line, silently discarding every
+      # package that follows.
       - name: Install TeX Live
         uses: TeX-Live/setup-texlive-action@v4
         with:
           packages: >-
             scheme-basic
+            collection-latexrecommended
+            collection-fontsrecommended
             latexmk
             newtx
-            helvetic
-            courier
-            iftex
-            placeins
-            xcolor
+            fontaxes
+            xstring
             algorithms
-            amsmath
-            amsfonts
-            booktabs
-            tabularx
+            placeins
             ragged2e
-            natbib
-            caption
-            graphics
-            url
+            tabularx
             xspace
             cm-super
             type1cm
