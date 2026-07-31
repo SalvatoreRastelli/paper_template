@@ -223,12 +223,6 @@ makes $P$ irreducible and aperiodic, so this stationary distribution is unique.
 squaring does not move the maximizer.
 \end{proof}
 
-The hub is therefore the node carrying the largest share of the long-path
-traffic under the ensemble in which no route is privileged, and so the
-graph's natural coordinator. The election needs only the
-$\arg\max$, so the square does not matter: agents compare $\tilde\psi_i$
-directly and never form $\pi$.
-
 \section{Cost of Not Using the Minimum Diameter Tree}
 \label{sec:mdst-gap}
 
@@ -420,7 +414,7 @@ $\mathrm{ch}(\cdot)$, $d_i$ refer to the routing tree and its structure
 the corresponding quantity afterward, as introduced at each result.
 
 Re-election needs the graph to survive the failure. This is supplied by the
-expander regime of Definition~\ref{def:expander}, not assumed separately:
+expander regime of Definition~\ref{def:expander},
 $\kappa(G)\geq\lambda_2$ \citep{fiedler1973} bounds the vertex connectivity
 below by the algebraic connectivity, so a $\lambda_2$ bounded away from $0$ by a
 constant $c>0$ gives $\kappa(G)\geq c$, and for $N$ large enough that $c>1$ the
@@ -612,9 +606,7 @@ barbell is the bottleneck the regime is meant to exclude. The bounds stated
 under Definition~\ref{def:expander} therefore do not cover these two. The
 protocol itself asks only for a connected graph, and the experiments below
 show the elected hub still matching the centralized baseline on all four
-topologies. Leaving the regime costs depth, not correctness: the tree grows
-deeper, each cycle takes longer, and the lattice accordingly reaches the
-fewest pulls of the four within a fixed horizon.
+topologies. 
 
 \subsection{Best Arm Identification Across Topologies}
 \label{sec:exp-bai}
@@ -628,7 +620,8 @@ in time steps, not in samples.
 
 Figure~\ref{fig:bai-topologies} bears this out: on every topology
 EigenTree-BAI and the centralized reference are statistically
-indistinguishable at every size.
+indistinguishable, the means differing by $9.6\%$ on average with the sign of
+the gap changing from size to size.
 
 \begin{figure*}[t]
     \centering

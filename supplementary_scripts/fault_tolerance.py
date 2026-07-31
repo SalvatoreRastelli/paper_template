@@ -710,55 +710,6 @@ def _draw_graph_tree_panel(ax, G, pos, hub, parent, N, title, dead_nodes=()):
     ax.axis("off")
 
 
-def plot_trees(data, graph_type, N, K, T, tag):
-    """Graph + induced routing tree: the initial tree, then the tree after
-    each failover. The 'before' state of failure e+1 is identical to the
-    'after' state of failure e (plus one more dead node), so it is not
-    repeated -- each event contributes one panel instead of two."""
-    n_snap = len(data["trees_snapshot"])
-    if n_snap < 2:
-        print("  No failover occurred; skipping tree snapshot figure.")
-        return
-    G = data["G"]
-    pos = nx.spring_layout(G, seed=0, k=1.8 / np.sqrt(N))
-
-    n_events = n_snap // 2  # each event contributes a (before, after) pair
-    n_panels = n_events + 1  # initial tree + one post-failover tree per event
-    n_cols = 2
-    n_rows = -(-n_panels // n_cols)  # ceil
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 5.5 * n_rows), squeeze=False)
-    flat_axes = [axes[r][c] for r in range(n_rows) for c in range(n_cols)]
-
-    initial = data["trees_snapshot"][0]
-    _draw_graph_tree_panel(
-        flat_axes[0], G, pos, initial["hub"], initial["parent"], N,
-        f"Initial tree (hub = node {initial['hub']})", dead_nodes=())
-
-    dead_so_far = []
-    for e in range(n_events):
-        before = data["trees_snapshot"][2 * e]
-        after = data["trees_snapshot"][2 * e + 1]
-        dead_so_far.append(before["hub"])
-
-        t_fail = data["fail_schedule"][e] if e < len(data["fail_schedule"]) else "?"
-        _draw_graph_tree_panel(
-            flat_axes[e + 1], G, pos, after["hub"], after["parent"], N,
-            f"After failure {e+1} ($t={t_fail}$): hub = node {after['hub']}",
-            dead_nodes=dead_so_far)
-
-    for ax in flat_axes[n_panels:]:
-        ax.axis("off")
-
-    fig.suptitle(f"EigenTree-FT: induced routing tree, initial and after each "
-                 f"hub failure\n{graph_type.upper()} graph, $N={N}$ "
-                 f"(dead nodes in gray, faded edges = non-tree graph edges)", fontsize=12)
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    out = FT_DIR / f"fault_tolerance_trees_{graph_type}_N{N}_K{K}_T{T}_{tag}.pdf"
-    fig.savefig(out)
-    plt.close(fig)
-    print(f"  Saved {out}")
-
-
 def plot_ft(data, graph_type, N, K, T, tag):
     fig, ax = plt.subplots(figsize=(COLUMN_WIDTH_IN, 2.4))
     ts = np.arange(1, len(data["group_ft"]) + 1)
@@ -796,7 +747,6 @@ def run_experiment(graph_type, N, K, T, fail_every, sigma, c, mode="all", seed=0
     if mode == "plot":
         data = load_ft_csv(graph_type, N, K, T, tag)
     plot_ft(data, graph_type, N, K, T, tag)
-    plot_trees(data, graph_type, N, K, T, tag)
 
 
 # ============================================================

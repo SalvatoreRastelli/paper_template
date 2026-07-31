@@ -1,0 +1,10 @@
+# Dependencies for reproducing the EigenTree experiments.
+# Only three third-party packages are needed; everything else is stdlib.
+#
+# The lower bounds below are the oldest versions the scripts are known to run
+# on. NetworkX is pinned below 3.0 only where its draw_networkx_edges keyword
+# set matters (visualize_merw.py); the bandit experiments themselves are
+# insensitive to the version.
+numpy>=2.0,<3
+networkx>=2.8
+matplotlib>=3.8

@@ -28,9 +28,7 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="networkx")
 # surrounding repository.
 RESULTS_DIR  = Path(__file__).resolve().parent / "results"
 REGRET_DIR   = RESULTS_DIR / "Regret"
-MERW_VIZ_DIR = RESULTS_DIR / "MERW_visualization"
 REGRET_DIR.mkdir(parents=True, exist_ok=True)
-MERW_VIZ_DIR.mkdir(parents=True, exist_ok=True)
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -700,7 +698,7 @@ STYLES = {
 
 
 def _csv_path(graph_type, N, K, T):
-    return DATA_DIR / f"relay_regret_{graph_type}_N{N}_K{K}_T{T}.csv"
+    return DATA_DIR / f"regret_min_{graph_type}_N{N}_K{K}_T{T}.csv"
 
 
 def compute_regret_data(n_runs, T, N, K, graph_type, sigma, c, n_workers, seed=0, p=None):
@@ -800,7 +798,7 @@ def plot_regret(results, T, N, K, graph_type, n_runs):
     fig.legend(handles, labels, loc="lower center", ncol=len(labels),
                bbox_to_anchor=(0.5, 0.0), columnspacing=1.0, handletextpad=0.4)
     fig.tight_layout(rect=[0.02, 0.09, 0.98, 1])
-    out1 = REGRET_DIR / f"relay_regret_{graph_type}_N{N}_K{K}_T{T}.pdf"
+    out1 = REGRET_DIR / f"regret_min_{graph_type}_N{N}_K{K}_T{T}.pdf"
     fig.savefig(out1)
     plt.close(fig)
     print(f"  Saved {out1}")

@@ -22,7 +22,7 @@ Usage:
 
 Output:
   results/merw_ucb_regret_*.pdf
-  results/merw_ucb_bai_*.pdf
+  results/best_arm_id_*.pdf
 """
 
 import argparse
@@ -31,6 +31,7 @@ import multiprocessing as mp
 import os
 import time
 import warnings
+import zlib
 from pathlib import Path
 
 import matplotlib
@@ -1068,7 +1069,14 @@ def compute_bai_data(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
     results = {name: {"mean": [], "std": [], "N_vals": BAI_N_VALS} for name in BAI_ALGO_NAMES}
     for N in BAI_N_VALS:
         sub_tasks = []
-        sub_rng = np.random.RandomState(seed + N)
+        # Mix the topology into the seed, not just N. Seeding on N alone gives
+        # every graph type the same stream of run seeds, so any two topologies
+        # realizing the same agent count draw identical rewards and report the
+        # same pull counts down to the run-to-run noise -- one experiment
+        # reported several times over. crc32 keeps the offset stable across
+        # processes and platforms, unlike hash(), which is salted per run.
+        sub_rng = np.random.RandomState(
+            (seed + N + zlib.crc32(graph_type.encode())) % (2**32))
         graph_seed = int(sub_rng.randint(0, 2**31))  # fixed graph for all runs at this N
         for _ in range(n_runs):
             # Each algorithm draws its own reward stream. Sharing one seed

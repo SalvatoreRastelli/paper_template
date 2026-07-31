@@ -13,7 +13,7 @@ Usage:
   python best_arm_id.py --graph er --K 10 --mode plot   # re-plot from cached data
 
 Output:
-  results/BAI/merw_ucb_bai_*.pdf
+  results/BAI/best_arm_id_*.pdf
 """
 
 import argparse
@@ -22,6 +22,7 @@ import multiprocessing as mp
 import os
 import time
 import warnings
+import zlib
 from pathlib import Path
 
 import matplotlib
@@ -467,7 +468,7 @@ BAI_STYLES = {
 
 
 def _bai_csv_path(graph_type, K):
-    return DATA_DIR / f"merw_ucb_bai_{graph_type}_K{K}.csv"
+    return DATA_DIR / f"best_arm_id_{graph_type}_K{K}.csv"
 
 
 def compute_bai_data(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
@@ -484,7 +485,14 @@ def compute_bai_data(n_runs, K, graph_type, sigma, c, n_workers, nu=0.1,
     results = {name: {"mean": [], "std": [], "N_vals": BAI_N_VALS} for name in BAI_ALGO_NAMES}
     for N in BAI_N_VALS:
         sub_tasks = []
-        sub_rng = np.random.RandomState(seed + N)
+        # Mix the topology into the seed, not just N. Seeding on N alone gives
+        # every graph type the same stream of run seeds, so any two topologies
+        # realizing the same agent count draw identical rewards and report the
+        # same pull counts down to the run-to-run noise -- one experiment
+        # reported several times over. crc32 keeps the offset stable across
+        # processes and platforms, unlike hash(), which is salted per run.
+        sub_rng = np.random.RandomState(
+            (seed + N + zlib.crc32(graph_type.encode())) % (2**32))
         graph_seed = int(sub_rng.randint(0, 2**31))  # fixed graph for all runs at this N
         for _ in range(n_runs):
             # Each algorithm draws its own reward stream. Sharing one seed
@@ -615,7 +623,7 @@ def plot_bai(results, graph_type, K, n_runs, delta=0.05):
                     ha="right", va="bottom", fontsize=8)
     fig.legend(handles, labels, loc="lower center", ncol=len(labels),
                bbox_to_anchor=(0.5, 0.0))
-    out = BAI_DIR / f"merw_ucb_bai_{graph_type}_K{K}.pdf"
+    out = BAI_DIR / f"best_arm_id_{graph_type}_K{K}.pdf"
     fig.savefig(out)
     plt.close(fig)
     print(f"  Saved {out}")
