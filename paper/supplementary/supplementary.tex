@@ -82,26 +82,26 @@ depth $d_i$ from the hop count carried on the first downlink it receives.
 \end{proposition}
 
 \begin{proof}
-\textbf{Uplink.} We show by induction on depth, from the leaves upward,
-that every node at depth $d$ has forwarded the sum of its entire subtree's
-values to its parent by the end of round $D-d+1$.
+\textbf{Uplink.} Write $h(i)$ for the height of the subtree rooted at $i$,
+so $h(i)=0$ at a leaf. We show by induction on $h(i)$ that every node $i$
+forwards the sum of its entire subtree's values to its parent in round
+$h(i)+1$.
 
-\emph{Base case.} A leaf $\ell$ at depth $d_\ell$ has no children, so its
-subtree sum is simply $x_\ell$. It has nothing to wait for, so it forwards
-$x_\ell$ to $\mathrm{par}(\ell)$ in round 1.
+\emph{Base case.} A leaf $\ell$ has no children, so its subtree sum is its
+own $x_\ell$. It has nothing to wait for, so it forwards $x_\ell$ to
+$\mathrm{par}(\ell)$ in round $1 = h(\ell)+1$.
 
-\emph{Inductive step.} Suppose every node at depth $d+1$ has forwarded its
-subtree sum to its parent by the end of round $D-(d+1)+1 = D-d$. A node $i$
-at depth $d$ with children $\mathrm{ch}(i)$ waits until it has received a
-forwarded value from every child. Each child's value arrives no later than
-round $D-d$ by the inductive hypothesis. Node $i$ sums these values
-together with its own $x_i$ and forwards the total to $\mathrm{par}(i)$ in
-round $D-d+1$.
+\emph{Inductive step.} Let $i$ have $h(i)=k>0$ and suppose the claim holds
+for every node of smaller height. Every child $c\in\mathrm{ch}(i)$ satisfies
+$h(c)\leq k-1$, so by hypothesis $c$ forwards in round $h(c)+1\leq k$, and
+node $i$ has received from all of its children by the end of round $k$. It
+sums those values with its own $x_i$ and forwards the total to
+$\mathrm{par}(i)$ in round $k+1 = h(i)+1$.
 
-Since $h^\star$ is at depth 0, the induction applied down to $d=1$ shows
-every direct child of $h^\star$ has forwarded its subtree sum by round $D$.
-The hub receives all of these by round $D$ and sums them with its own
-$x_{h^\star}$ to obtain $\sum_i x_i$.
+Each child $c$ of $h^\star$ has $h(c)\leq D-1$, since the tree has height
+$D$ and $c$ sits at depth $1$. By the claim, $c$ forwards in round
+$h(c)+1\leq D$, so the hub has received from every child by the end of round
+$D$ and sums them with its own $x_{h^\star}$ to obtain $\sum_i x_i$.
 
 \emph{Termination without knowing $D$.} A node $i$ at depth $d$ cannot know
 $D$, but it does not need to: it simply waits until every child, a fixed
@@ -140,8 +140,8 @@ steps per decision round.
 \begin{proof}
 Fix any decision round $r$. By Proposition~\ref{prop:aggbcast} (uplink
 direction, with $x_i = b_i$), after $D$ rounds the hub holds $B =
-\sum_{i\in V} b_i$ exactly, not an approximation or a partial sum, since
-every node's contribution is included by the termination argument above.
+\sum_{i\in V} b_i$ exactly, since every node's contribution is included by
+the termination argument above.
 Because $\mathcal{A}$'s decision at round $r$ depends only on $B$, the hub
 computes exactly the action a centralized instance of $\mathcal{A}$ would
 compute given the same set of per-agent contributions.
@@ -204,8 +204,8 @@ since each $A_{i_t i_{t+1}}=1$ along an admissible path. The result depends only
 on the endpoints $i_0, i_L$ and the length $L$, not on the route taken, so every
 admissible path of length $L$ between the same two nodes carries the same
 probability. This is the defining property the main text asks of the walk, and
-it is what makes the ensemble non-local: an ordinary random walk weights each
-step by $1/\deg$, giving longer weight to routes through low-degree nodes.
+what makes the ensemble non-local: an ordinary random walk weights each step
+by $1/\deg$, giving longer weight to routes through low-degree nodes.
 
 \emph{Stationarity.} With $\pi_i = \psi_i^2$, which is a distribution since
 $\|\psi\|_2=1$,
@@ -223,10 +223,10 @@ makes $P$ irreducible and aperiodic, so this stationary distribution is unique.
 squaring does not move the maximizer.
 \end{proof}
 
-The hub is thus the node carrying the largest share of the long-path traffic
-under the ensemble in which no route is privileged, which is the sense in which
-it is the graph's natural coordinator. Note the election needs only the
-$\arg\max$, so the square is immaterial: agents compare $\tilde\psi_i$
+The hub is therefore the node carrying the largest share of the long-path
+traffic under the ensemble in which no route is privileged, and so the
+graph's natural coordinator. The election needs only the
+$\arg\max$, so the square does not matter: agents compare $\tilde\psi_i$
 directly and never form $\pi$.
 
 \section{Cost of Not Using the Minimum Diameter Tree}
@@ -277,8 +277,8 @@ Let $\delta_{\bar N}(h^\star) = \min_{u \notin \mathcal{N}_G(h^\star)\cup\{h^\st
 Let $u \in V$ be any node with $u \neq h^\star$ and $u \notin
 \mathcal{N}_G(h^\star)$: $u$ is not $h^\star$ itself and not a neighbor of
 $h^\star$. We show $d(h^\star, u) \leq 2$. Since $u$ was an arbitrary
-non-neighbor, and every neighbor of $h^\star$ trivially has
-$d(h^\star,\cdot)=1$, this establishes $D = \mathrm{ecc}_G(h^\star) \leq 2$.
+non-neighbor, and every neighbor of $h^\star$ is at distance $1$, this
+establishes $D = \mathrm{ecc}_G(h^\star) \leq 2$.
 
 Consider $\mathcal{N}_G(h^\star)$ and $\mathcal{N}_G(u)$, the neighbor sets
 of $h^\star$ and $u$ respectively. Both are subsets of $V \setminus
@@ -313,10 +313,12 @@ reason: the MDST is itself deep, so a suboptimal root cannot lose much.
 
 \begin{sproposition}[Sparse expanders: the MDST is logarithmically deep]
 \label{prop:mdst-sparse}
-If $G$ is in the expander regime of Definition~\ref{def:expander}, then $D' =
-R(G) = \Theta(\log N)$, and consequently $D \leq 2D' = \Theta(\log N)$: even
-the optimal root gives a logarithmically deep tree, and the elected hub is
-within a factor $2$ of it.
+Let $G$ be in the expander regime of Definition~\ref{def:expander}. Then $D'
+= R(G) = O(\log N)$, and $D \leq 2D'$, so the elected hub is within a factor
+$2$ of the depth an MDST would achieve. If $G$ also has bounded degree
+$\Delta = O(1)$, as a random regular graph does, then $D' = \Theta(\log N)$:
+even the optimal root gives a logarithmically deep tree, so a suboptimal one
+cannot lose much.
 \end{sproposition}
 
 \begin{proof}
@@ -324,26 +326,26 @@ within a factor $2$ of it.
 $\mathrm{diam}(G) = O(\log N)$ \citep{mohar1991}, and $R(G)\leq
 \mathrm{diam}(G)$ always, so $D' = O(\log N)$.
 
-\emph{Lower bound.} On any graph $\mathrm{diam}(G)\leq 2R(G)$: for any $u,w$
-and a center $z$ achieving the radius, $d(u,w)\leq d(u,z)+d(z,w)\leq 2R(G)$ by
-the triangle inequality. Hence $D'=R(G)\geq \mathrm{diam}(G)/2$. In the
-expander regime the graph is connected with degrees bounded by $N-1$, and a
-graph of maximum degree $\Delta$ has $\mathrm{diam}(G) = \Omega(\log_\Delta
-N)$, since a ball of radius $r$ holds at most $1+\Delta\frac{(\Delta-1)^r -
-1}{\Delta - 2}$ nodes and must cover all $N$. For bounded-degree expanders,
-random regular graphs or ER just above the connectivity threshold, $\Delta =
-O(1)$ or $O(\log N)$, giving $\mathrm{diam}(G) = \Omega(\log N /\log\log N)$
-and so $D' = \Omega(\log N/\log\log N)$. Combined with the upper bound, $D'$ is
-logarithmic up to the $\log\log$ factor, and exactly $\Theta(\log N)$ when
-$\Delta = O(1)$.
+\emph{Lower bound.} This direction needs the degree hypothesis: a bounded
+$\lambda_2$ alone does not force a deep graph, since $K_N$ lies in the regime
+and has radius $1$. Assume then a maximum degree $\Delta$. On any graph
+$\mathrm{diam}(G)\leq 2R(G)$, since for any $u,w$ and a center $z$ achieving
+the radius the triangle inequality gives $d(u,w)\leq d(u,z)+d(z,w)\leq 2R(G)$;
+hence $D'=R(G)\geq \mathrm{diam}(G)/2$. A graph of maximum degree $\Delta$ has
+$\mathrm{diam}(G) = \Omega(\log_\Delta N)$, since a ball of radius $r$ holds
+at most $1+\Delta\frac{(\Delta-1)^r - 1}{\Delta - 2}$ nodes and must cover all
+$N$. With $\Delta = O(1)$ this gives $\mathrm{diam}(G) = \Omega(\log N)$, so
+$D' = \Omega(\log N)$, which with the upper bound gives $D' = \Theta(\log N)$.
+The bound weakens as $\Delta$ grows: at $\Delta = O(\log N)$ it gives only
+$D' = \Omega(\log N/\log\log N)$.
 
 \emph{Consequence.} $D = \mathrm{ecc}_G(h^\star) \leq \mathrm{diam}(G) \leq
-2R(G) = 2D'$ for any root whatsoever, in particular $h^\star$. So the elected
-hub never pays more than twice the optimal depth, and both are
+2R(G) = 2D'$ for any root, in particular $h^\star$, so the elected hub never
+pays more than twice the optimal depth. Under the degree hypothesis both are
 $\Theta(\log N)$.
 \end{proof}
 
-The regime where the choice of root is genuinely expensive is the one
+The regime where the choice of root is expensive is the one
 Definition~\ref{def:expander} excludes. On a path, $\lambda_2 = \Theta(N^{-2})$
 and $\mathrm{diam}(G) = \Theta(N)$, so the factor-$2$ bound above is still
 true but both quantities are linear in $N$.
@@ -373,11 +375,11 @@ states is identical between the relay protocol and a literal centralized
 run. So the leading-order regret term is identical as a function of $P$.
 
 The relationship between $P$ and wall-clock horizon $T$ follows from the
-fixed cycle structure. Each cycle lasts $2D+1$ rounds: one simultaneous
-pull round, $D$ uplink rounds, one hub-decision round, $D$ downlink
-rounds. Every cycle contributes exactly $N$ new pulls, one per agent, to
-$P$. Over horizon $T$, the number of completed cycles is
-$\Theta(T/(2D+1))$, so $P = \Theta(NT/(2D+1))$.
+fixed cycle structure. Each cycle lasts $2D+1$ rounds: $D$ uplink rounds,
+one $\textsc{HubDecide}$ round in which the hub acts on the completed
+aggregate, and $D$ downlink rounds. Every cycle contributes exactly $N$ new
+pulls, one per agent, to $P$. Over horizon $T$, the number of completed
+cycles is $\Theta(T/(2D+1))$, so $P = \Theta(NT/(2D+1))$.
 \end{proof}
 
 \begin{corollary}[BAI sample complexity matches centralized BAI]
@@ -472,10 +474,12 @@ Substituting $t = \tau_{\mathrm{init}}$ and the two initial angles gives the
 claim: the warm start begins at $\tan\Theta \leq \sqrt{\deg(v)}/\gamma$, while
 a cold start from the uniform vector begins at $\tan\Theta = \Theta(1)$, having
 no dependence on the failure. Both contract at the same rate over the same
-budget, so the warm start's residual is smaller by the factor
-$\gamma/\sqrt{\deg(v)}$, and it is never worse. The advantage is largest when
-$\deg(v)$ is small; when $\deg(v) = \Theta(N)$ it narrows to
-$\gamma/\sqrt{N}$, since $\deg(v) \leq N$ always.
+budget, so the warm start's guarantee is tighter by the factor
+$\gamma/\sqrt{\deg(v)}$. The comparison is between the two bounds, which is
+what the survivors can act on, since neither $\deg(v)$ nor $\gamma$ is known
+to any node; on a particular graph a cold start may of course land closer. The
+advantage is largest when $\deg(v)$ is small, and when $\deg(v) = \Theta(N)$
+it narrows to $\gamma/\sqrt{N}$, since $\deg(v) \leq N$ always.
 \end{proof}
 
 \begin{remark}
@@ -520,15 +524,14 @@ component and the child $c$ for each lower one, and each detector floods the
 notice over the intact tree edges of its own component only.
 
 Two quantities bound the horizon. First, the detectors do not fire
-simultaneously: a detector at depth $d$ expects the failed node's message at hop
-$d$ (uplink) or hop $2D-d$ (downlink) of the cycle, so two detectors' firing
-times differ by their difference in these expected hops, which is at most the
-depth spread $D$. Since all detectors use the same $\tau$ measured against the
-same round-1 schedule, the last detector fires at most $D$ hops after the first.
-Second, within a component the notice floods over tree edges from the detector,
-reaching the farthest node in at most the component's height, itself at most $D$
-hops. Adding the two, the last node to hear does so at most $D + D = 2D$ hops
-after the earliest detection.
+simultaneously: each node's timer restarts whenever a signal arrives, so a
+detector fires $\tau$ after its own last contact with $v$, not at a fixed hop
+of a global schedule. The parent and the children of $v$ last hear from it
+within one uplink-and-downlink traversal of each other, so their firing times
+differ by at most the depth spread $D$. Second, within a component the notice
+floods over tree edges from the detector, reaching the farthest node in at
+most the component's height, itself at most $D$ hops. Adding the two, the last
+node to hear does so at most $D + D = 2D$ hops after the earliest detection.
 \end{proof}
 
 The same $2D$ budget makes the restart synchronous. The notice is flooded
@@ -537,19 +540,18 @@ detector knows that $h$ of the $2D$ hops have elapsed and waits the remaining
 $2D-h$ hops before taking its first power-iteration step. Every node's
 $(\text{hops travelled}) + (\text{hops waited}) = 2D$, so all survivors take
 their first step at the same instant, measured from the earliest detection, with
-no clock agreement. The wait is read directly off the hop counter, which is the
-node's depth $d_i$ up to the fixed offset it always was, so the depth each node
-already holds serves three roles at once, the detection deadline through $\tau$,
-the bound on detector skew, and the restart countdown, and no field is added to
-any message.
+no clock agreement. The wait is read off the hop counter, which is the node's
+depth $d_i$ up to a fixed offset, so the depth each node already holds gives
+the detection deadline through $\tau$, the bound on detector skew, and the
+restart countdown, and no field is added to any message.
 
 \subsection{Cost of a Recovery}
 \label{sec:recovery-cost}
 
 The main text reports recovery times measured from the failure injection to
-the round at which ordinary cycling resumes. That total decomposes into four
-stages, each already established above, and the decomposition is what those
-measurements are checked against.
+the round at which ordinary cycling resumes. That total decomposes into the
+four stages established above, and those measurements are checked against the
+decomposition.
 
 \begin{sproposition}[Recovery cost]
 \label{prop:recovery-cost}
@@ -597,66 +599,22 @@ The main text evaluates EigenTree on Erd\H{o}s--R\'{e}nyi graphs, the setting
 its analysis targets: above the connectivity threshold an ER graph is an
 expander with high probability, so it lies in the regime of
 Definition~\ref{def:expander} where the costs are stated. Nothing in the
-protocol is specific to that model, so this section repeats both
-instantiations on three further topologies: Barab\'{a}si--Albert, a $2$D grid,
-and a barbell. Together they vary degree distribution, diameter, and the
-sharpness of the centrality peak.
+protocol itself requires that regime, so this section repeats both
+instantiations on Barab\'{a}si--Albert, square-lattice and barbell graphs,
+which vary degree distribution and diameter and so the depth of the elected
+tree.
 
-\subsection{The Elected Hub and Routing Tree}
-\label{sec:exp-trees}
-
-Figures~\ref{fig:tree-er}--\ref{fig:tree-barbell} show what the election
-produces on each of the four graphs. The left panel colours every node by its
-eigenvector centrality $\psi_i/\psi_{\max}$, the middle panel overlays the
-routing tree on the graph, and the right panel redraws that tree as a
-hierarchy with every arrow pointing from a child to its parent, so the whole
-structure funnels into the hub.
-
-The four cases differ in how sharply the centrality peaks. On the
-Barab\'{a}si--Albert graph one high-degree node dominates and the tree is
-shallow and wide, most nodes attaching to the hub directly. The grid is
-near-regular, so the centrality is spread almost evenly, the hub sits at the
-centre of the lattice, and the tree is correspondingly deep. The barbell
-splits the mass between the two clique-bridge endpoints; the hub is one of
-them and reaches the far clique through the other, which is why its depth is
-$2$ rather than the $3$ its diameter would suggest. The
-Erd\H{o}s--R\'{e}nyi graph sits between these, with a mild peak and a
-two-hop tree.
-
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_er_N20_p0.5.pdf}
-    \caption{Centrality and routing tree on an Erd\H{o}s--R\'{e}nyi graph
-    ($N=20$, $p=0.5$).}
-    \label{fig:tree-er}
-\end{figure*}
-
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_ba_N20.pdf}
-    \caption{Centrality and routing tree on a Barab\'{a}si--Albert graph
-    ($N=20$, $m=2$). The centrality concentrates on one high-degree node, so
-    the tree is shallow and wide.}
-    \label{fig:tree-ba}
-\end{figure*}
-
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_grid_N25.pdf}
-    \caption{Centrality and routing tree on a $5\times5$ grid. The graph is
-    near-regular, so the centrality is nearly flat and the elected hub sits at
-    the centre of the lattice.}
-    \label{fig:tree-grid}
-\end{figure*}
-
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\textwidth]{results/MERW_visualization/merw_tree_barbell_N20.pdf}
-    \caption{Centrality and routing tree on a barbell graph ($N=20$). The hub
-    is one of the two bridge endpoints and reaches the far clique through the
-    other, giving depth $2$ on a graph of diameter $3$.}
-    \label{fig:tree-barbell}
-\end{figure*}
+Two of the three fall outside Definition~\ref{def:expander}. Taking $N$ from
+$25$ to $196$ leaves the BA graph's $\lambda_2$ near $0.6$, but roughly halves
+it at each step on the lattice ($0.38$ to $0.05$) and on the barbell ($0.14$
+to $0.02$), so neither keeps the spectral gap the analysis assumes; the
+barbell is the bottleneck the regime is meant to exclude. The bounds stated
+under Definition~\ref{def:expander} therefore do not cover these two. The
+protocol itself asks only for a connected graph, and the experiments below
+show the elected hub still matching the centralized baseline on all four
+topologies. Leaving the regime costs depth, not correctness: the tree grows
+deeper, each cycle takes longer, and the lattice accordingly reaches the
+fewest pulls of the four within a fixed horizon.
 
 \subsection{Best Arm Identification Across Topologies}
 \label{sec:exp-bai}
@@ -668,32 +626,19 @@ Proposition~\ref{prop:aggbcast}, and the elimination schedule $L_r$ depends
 only on $N,K,\delta,r$. The topology enters through $D$ alone, which is a cost
 in time steps, not in samples.
 
-Figure~\ref{fig:bai-topologies} bears this out. The two algorithms draw
-independent reward streams, so the comparison is an ordinary two-sample one;
-their means differ by $8.9\%$ on average and at most $0.29$ standard errors at
-any size, well inside the run-to-run spread. A fixed-confidence stopping time
-is itself highly variable, with a coefficient of variation near $0.7$ here, so
-differences of this size are noise rather than a cost of routing. The first
-three panels coincide because at fixed $N$ the pull count is a function of the
-elimination schedule and the rewards drawn, and neither knows the graph; the
-grid differs only because it is sized by its side length and so realizes
-$\lfloor\sqrt N\rfloor^2$ agents rather than $N$.
+Figure~\ref{fig:bai-topologies} bears this out: on every topology
+EigenTree-BAI and the centralized reference are statistically
+indistinguishable at every size.
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{results/supplementary/bai_topologies.pdf}
     \caption{Total arm pulls to identify the best arm, EigenTree-BAI against
     the centralized reference \citep{hillel2013distributed}, on four
-    topologies ($K=10$, $\delta=0.05$, 50 runs per $N$). The two draw
-    independent reward streams; error bars are the standard deviation across
-    runs. Their means differ by $8.9\%$ on average and at most $0.29$ standard
-    errors at any size, so the curves are indistinguishable given how variable
-    a fixed-confidence stopping time is. The first three panels coincide
-    because at fixed $N$ the pull count is a function of the elimination
-    schedule and the rewards drawn, and neither knows the graph; the grid
-    differs only because it realizes $\lfloor\sqrt N\rfloor^2$ agents. This is
-    what Corollary~\ref{cor:bai} predicts: the tree costs communication,
-    $2D+1$ rounds per elimination round, rather than samples.}
+    topologies ($K=10$, $\delta=0.05$, 50 runs per $N$; error bars are the
+    standard deviation across runs). The two agree on every topology, as
+    Corollary~\ref{cor:bai} predicts: the tree costs communication, $2D+1$
+    rounds per elimination round, and no extra samples.}
     \label{fig:bai-topologies}
 \end{figure*}
 
@@ -706,42 +651,26 @@ enters only through $D$, so the prediction is that regret tracks the
 centralized baseline as a function of pulls, while the number of pulls fitting
 into a fixed horizon falls as the tree deepens.
 
-Figure~\ref{fig:regret-topologies} therefore plots regret against total pulls
-rather than against the round. The distinction matters: a cycle costs $2D+1$
-rounds, so a deeper tree completes fewer cycles and makes fewer pulls in the
-same $T$, and its cumulative regret at $T$ would read lower merely because it
-has played less. Drawing every curve out to the largest budget all three
-algorithms reach removes that confound.
-
-On that footing the result is uniform. The EigenTree-UCB and Central-UCB
-curves lie on top of each other on every topology, within bands that overlap
-throughout, so the two are indistinguishable at this sample size rather than
-one edging the other. Coop-UCB2 sits clearly above both everywhere.
-
-Its grid curve stands out by two orders of magnitude, which is why that panel
-is drawn on a logarithmic ordinate. A small spectral gap alone does not
-account for it, since the barbell's $\lambda_2$ is smaller still ($0.039$
-against the grid's $0.098$ at $N=100$) and its Coop-UCB2 regret is an order of
-magnitude lower; what separates the grid is that low degree and large diameter
-apply together, so the doubly stochastic weights both move little mass per
-round and must move it far. EigenTree is insensitive to either, since
-Proposition~\ref{prop:aggbcast} delivers the exact aggregate in $D$ hops
-however slowly the graph mixes, and that insensitivity is the practical case
-for routing over a tree instead of averaging over the graph. The price
-EigenTree pays is visible in how far each panel extends along the pull axis,
-which shrinks as $D$ grows.
+Figure~\ref{fig:regret-topologies} compares the algorithms at equal samples,
+plotting regret against total pulls. EigenTree-UCB tracks Central-UCB on all
+four topologies, with bands that overlap throughout. Coop-UCB2 is worse
+everywhere, and its margin widens on the barbell and the grid, the two graphs
+with the smallest spectral gaps ($\lambda_2 = 0.039$ and $0.098$ at $N=100$):
+it clears EigenTree's band by roughly three standard deviations on the
+barbell, and by two orders of magnitude on the grid, which is why that panel
+uses a logarithmic ordinate. Consensus averaging slows down as a graph mixes
+more slowly, whereas the routing tree delivers the exact aggregate in $D$ hops
+whatever the spectral gap.
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{results/supplementary/regret_topologies.pdf}
     \caption{Group cumulative regret against total arm pulls on four
     topologies ($N=100$, $K=5$, $T=5000$, 50 runs); bands are the standard
-    deviation across runs. Plotting against pulls rather than rounds compares
-    the algorithms on equal samples, which keeps the depth cost in time where
-    Corollary~\ref{cor:regret} puts it: a cycle costs $2D+1$ rounds, so a
-    deeper tree simply reaches fewer pulls within the horizon. EigenTree-UCB
-    tracks Central-UCB on every topology, while Coop-UCB2 is worse throughout.
-    The grid panel uses a logarithmic ordinate, since Coop-UCB2 runs two
+    deviation across runs. Plotting against pulls compares the algorithms at
+    equal samples. EigenTree-UCB tracks Central-UCB on every topology, while
+    Coop-UCB2 is worse throughout and furthest behind on the barbell and the
+    grid. The grid panel uses a logarithmic ordinate, since Coop-UCB2 runs two
     orders of magnitude above the other two there.}
     \label{fig:regret-topologies}
 \end{figure*}
@@ -754,12 +683,13 @@ Apple M1 Pro with 16\,GB of RAM under macOS~26.5. The code is pure Python and
 uses no GPU.
 
 \paragraph{Software.} Python~3.12 with NumPy~2.4, NetworkX~3.6, and
-Matplotlib~3.10; no other third-party libraries are required. The three scripts
-in the code archive (\texttt{regret\_min.py}, \texttt{best\_arm\_id.py},
-\texttt{fault\_tolerance.py}) are self-contained and share no imports. Each
-takes a \texttt{--graph} argument selecting the topology, so every table in
-Section~\ref{sec:exp} is reproduced by rerunning the corresponding script once
-per topology.
+Matplotlib~3.10; no other third-party libraries are required. The experiment
+scripts in the code archive (\texttt{regret\_min.py},
+\texttt{best\_arm\_id.py}, \texttt{fault\_tolerance.py}) are self-contained
+and share no imports. Each takes a \texttt{--graph} argument selecting the
+topology, so the figures in Section~\ref{sec:exp} are reproduced by rerunning
+the corresponding script once per topology and then
+\texttt{supplementary\_figures.py} to draw the panels.
 
 \paragraph{Randomness and seeds.} Every experiment is fully deterministic given
 its seed. A master \texttt{RandomState} seeded at a fixed value derives one graph
@@ -770,35 +700,31 @@ draws all flow from these seeds, so rerunning a script reproduces the reported
 curves exactly.
 
 Gossip partner selection during the power iteration draws from a generator of
-its own, separate from the one supplying rewards. This matters for the
-like-for-like comparisons: electing the hub consumes randomness, so drawing
-gossip partners from the reward stream would leave the protocol and its
-baseline reading different rewards from the same seed, and they would then
-diverge through an artifact of the simulation rather than through anything the
-protocol does.
+its own, separate from the one supplying rewards. Electing the hub consumes
+randomness, so a shared generator would leave the protocol and its baseline
+reading different rewards from the same seed, and they would diverge through
+an artifact of the simulation.
 
 In the BAI comparison each algorithm additionally draws its own reward stream.
-Sharing one would couple them exactly: both request the same arms in the same
-order, so they would receive identical rewards, eliminate identically, and
-report the same pull count with zero variance in the difference. That is a
-valid check that routing loses no information, but it is not a measurement of
-sample complexity, since the agreement would hold by construction rather than
-be observed. Independent streams make Figure~\ref{fig:bai-topologies} an
-ordinary two-sample comparison.
+On a shared stream the two would request the same arms in the same order and
+so agree by construction, which tests the implementation and not the sample
+complexity.
 
 \paragraph{Parameters.} The main-text experiments use the settings stated
 there: for regret minimization, $N=100$, $K=5$, $T=5000$, $p=0.5$, 50 runs; for
 best arm identification, $K=10$, $\delta=0.05$, $p=0.5$, 50 runs per $N \in
 \{10,20,30,40,50\}$; for fault tolerance, $N=20$, $p=0.5$, $K=10$, $T=2000$,
 with the hub killed at $t=500,1000,1500$. The UCB exploration constant is $c=2$
-and the sub-Gaussian parameter is $\sigma=1$. Reported quantities are means over
-the runs, with standard error of the mean shown as shaded bands or error bars.
+and the sub-Gaussian parameter is $\sigma=1$. Reported quantities are means
+over the runs. The main-text figures show the standard error of the mean; the
+topology figures of Section~\ref{sec:exp} show the standard deviation across
+runs, as their captions state.
 
 The topology sweeps of Section~\ref{sec:exp} reuse these settings and vary only
-the graph. Grid graphs are built with side $\lfloor\sqrt N\rfloor$, so their
-realized agent count is read off the generated graph rather than the requested
-$N$; both the protocol and its baseline are given that same count, so the
-comparison stays like-for-like.
+the graph. Square lattices are built with side $\lfloor\sqrt N\rfloor$, so a
+request for $N$ agents yields $\lfloor\sqrt N\rfloor^2$ of them. The realized
+count is read off the generated graph, and the protocol and its baseline are
+both given that same count, which keeps the comparison like-for-like.
 
 \bibliography{references}
 

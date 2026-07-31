@@ -8,7 +8,9 @@
       "Read(//private/tmp/**)",
       "Bash(awk '/^\\\\\\\\section\\\\{Fault Tolerance\\\\}/{s=NR} /^\\\\\\\\section\\\\{Experiments\\\\}/{print s\"-\"NR; exit}' main.tex)",
       "Bash(python3 linters/lint_algorithms.py paper/aaai/main.tex)",
-      "Bash(echo \"aaai EXIT: $?\")"
+      "Bash(echo \"aaai EXIT: $?\")",
+      "Bash(TLPDB=/usr/local/texlive/2025/tlpkg/texlive.tlpdb *)",
+      "Read(//usr/local/texlive/2025/tlpkg/**)"
     ]
   }
 }
